@@ -5,93 +5,91 @@ const STYLE = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 7px 14px;
-    border-bottom: 1px solid #2a2a2a;
-    background: #161616;
-    gap: 10px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+    gap: 12px;
     flex-wrap: wrap;
   }
-  .toolbar-left  { display: flex; align-items: center; gap: 10px; }
-  .toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .toolbar-left  { display: flex; align-items: center; gap: 12px; }
+  .toolbar-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
-  .result-count { font-size: 11px; color: #555; white-space: nowrap; }
-  .result-count strong { color: #f0b429; }
+  .result-count {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--text-3);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .result-count strong { color: var(--text-1); font-weight: 500; }
 
   .search-box {
-    background: #1c1c1c;
-    border: 1px solid #2a2a2a;
-    color: #e8e8e8;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    padding: 5px 10px;
-    width: 190px;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 6px 10px;
+    width: 200px;
     outline: none;
-    transition: border-color 0.15s;
+    transition: border-color 0.1s;
+    border-radius: 2px;
   }
-  .search-box:focus { border-color: #f0b429; }
-  .search-box::placeholder { color: #333; }
+  .search-box:focus { border-color: rgba(232,160,32,0.4); }
+  .search-box::placeholder { color: var(--text-3); }
 
   .sort-select {
-    background: #1c1c1c;
-    border: 1px solid #2a2a2a;
-    color: #e8e8e8;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    padding: 5px 8px;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    padding: 6px 8px;
     outline: none;
     cursor: pointer;
-    transition: border-color 0.15s;
+    border-radius: 2px;
+    transition: border-color 0.1s;
   }
-  .sort-select:focus { border-color: #f0b429; }
+  .sort-select:focus { border-color: var(--border-2); }
 
-  .col-toggle-pill {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    padding: 3px 9px;
-    border: 1px solid #2a2a2a;
+  .col-toggle {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 400;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
     background: transparent;
-    color: #444;
     cursor: pointer;
-    border-radius: 999px;
-    letter-spacing: 0.06em;
-    transition: all 0.15s;
+    border-radius: 3px;
+    transition: color 0.1s, border-color 0.1s, background 0.1s;
+    letter-spacing: 0;
   }
-  .col-toggle-pill.col-on { border-color: #333; color: #666; }
-  .col-toggle-pill.col-on:hover { border-color: #555; color: #888; }
-  .col-toggle-pill.col-off { border-color: #1e1e1e; color: #2a2a2a; }
-  .col-toggle-pill.col-off:hover { border-color: #333; color: #444; }
+  .col-toggle.col-on  { color: var(--text-2); border-color: var(--border); }
+  .col-toggle.col-on:hover  { color: var(--text-1); border-color: var(--border-2); }
+  .col-toggle.col-off { color: var(--text-3); border-color: transparent; background: transparent; }
+  .col-toggle.col-off:hover { color: var(--text-3); border-color: var(--border); }
 
   .export-btn {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    padding: 4px 11px;
-    border: 1px solid #2a2a2a;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
     background: transparent;
-    color: #555;
+    color: var(--text-3);
     cursor: pointer;
-    letter-spacing: 0.08em;
-    transition: all 0.15s;
+    border-radius: 3px;
+    transition: color 0.1s, border-color 0.1s;
+    letter-spacing: 0;
   }
-  .export-btn:hover { border-color: #22c55e; color: #22c55e; }
-
-  .kbd-hint { font-size: 9px; color: #333; letter-spacing: 0.04em; }
-  .kbd {
-    display: inline-block;
-    border: 1px solid #2a2a2a;
-    border-radius: 2px;
-    padding: 1px 4px;
-    font-size: 9px;
-    color: #3a3a3a;
-    margin: 0 1px;
-  }
+  .export-btn:hover { color: var(--text-1); border-color: var(--border-2); }
 `;
 
 const COL_LABELS = {
-  sparkline: "SPARK",
-  epsGrowth: "EPS GR%",
-  revGrowth: "REV GR%",
-  pb: "P/B",
-  momentum: "MOM",
+  sparkline:  "Trend",
+  epsGrowth:  "EPS Gr%",
+  revGrowth:  "Rev Gr%",
+  pb:         "P/B",
+  momentum:   "Momentum",
 };
 
 const Toolbar = forwardRef(function Toolbar({
@@ -110,25 +108,23 @@ const Toolbar = forwardRef(function Toolbar({
       <div className="toolbar">
         <div className="toolbar-left">
           <span className="result-count">
-            <strong>{resultCount}</strong> results
+            <strong>{resultCount}</strong> result{resultCount !== 1 ? "s" : ""}
           </span>
           <input
             ref={searchRef}
             className="search-box"
-            placeholder="/ search ticker or name"
+            placeholder="Search  /"
             value={searchValue}
             onChange={e => onSearchChange(e.target.value)}
           />
         </div>
 
         <div className="toolbar-right">
-          {/* Column toggles */}
           {Object.entries(COL_LABELS).map(([key, label]) => (
             <button
               key={key}
-              className={`col-toggle-pill ${visibleColumns[key] ? "col-on" : "col-off"}`}
+              className={`col-toggle ${visibleColumns[key] ? "col-on" : "col-off"}`}
               onClick={() => onColumnToggle(key)}
-              title={`${visibleColumns[key] ? "Hide" : "Show"} ${label}`}
             >
               {label}
             </button>
@@ -139,7 +135,7 @@ const Toolbar = forwardRef(function Toolbar({
             value={sortKey}
             onChange={e => onSortChange(e.target.value)}
           >
-            <option value="mktCap">Mkt Cap</option>
+            <option value="mktCap">Market Cap</option>
             <option value="change">% Change</option>
             <option value="pe">P/E</option>
             <option value="pb">P/B</option>
@@ -148,9 +144,7 @@ const Toolbar = forwardRef(function Toolbar({
             <option value="price">Price</option>
           </select>
 
-          <button className="export-btn" onClick={onExport} title="Export CSV">
-            ↓ CSV
-          </button>
+          <button className="export-btn" onClick={onExport}>Export CSV</button>
         </div>
       </div>
     </>

@@ -1,9 +1,35 @@
-/* Reset Vite scaffold defaults so the full-viewport terminal layout works */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* Design token foundation */
+:root {
+  --bg:        #080808;
+  --surface-1: #0f0f0f;
+  --surface-2: #141414;
+  --surface-3: #1a1a1a;
+  --border:    rgba(255, 255, 255, 0.06);
+  --border-2:  rgba(255, 255, 255, 0.10);
+
+  --text-1:    #f0f0f0;
+  --text-2:    #888888;
+  --text-3:    #444444;
+
+  --accent:    #e8a020;
+  --pos:       #34c759;
+  --neg:       #ff3b30;
+  --blue:      #3b82f6;
+
+  --font-ui:   system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Roboto Mono', monospace;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
 body {
-  margin: 0;
-  background: #0a0a0a;
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: var(--font-mono);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -17,3 +43,7 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+::-webkit-scrollbar        { width: 4px; height: 4px; }
+::-webkit-scrollbar-track  { background: var(--bg); }
+::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.08); border-radius: 2px; }

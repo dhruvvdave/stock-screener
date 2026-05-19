@@ -1,70 +1,56 @@
 import { useMemo } from "react";
 
-export default function AreaChart({ positive, width = 308, height = 120, days = 30 }) {
-  const { coords, minPrice, maxPrice } = useMemo(() => {
-    const basePrice = 100;
+export default function AreaChart({ positive, width = 308, height = 110, days = 30 }) {
+  const { coords, minP, maxP } = useMemo(() => {
     const pts = Array.from({ length: days }, (_, i) => {
       const trend = positive ? i * 0.8 : -i * 0.6;
-      const noise = (Math.sin(i * 1.9) * 4) + (Math.sin(i * 0.7) * 3);
-      return basePrice + trend + noise;
+      return 100 + trend + Math.sin(i * 1.9) * 4 + Math.sin(i * 0.7) * 3;
     });
     const min = Math.min(...pts), max = Math.max(...pts);
-    const padY = 14;
-    const chartH = height - padY * 2;
-    const padX = 38;
-    const chartW = width - padX - 4;
-    const norm = pts.map((p, i) => ({
-      x: padX + (i / (days - 1)) * chartW,
-      y: padY + (1 - (p - min) / (max - min || 1)) * chartH,
-    }));
-    return { coords: norm, minPrice: min, maxPrice: max };
+    const padX = 36, padY = 10;
+    const cW = width - padX - 4, cH = height - padY * 2;
+    return {
+      coords: pts.map((p, i) => ({
+        x: padX + (i / (days - 1)) * cW,
+        y: padY + (1 - (p - min) / (max - min || 1)) * cH,
+      })),
+      minP: min, maxP: max,
+    };
   }, [positive, width, height, days]);
 
-  const color = positive ? "#22c55e" : "#ef4444";
-  const gradId = `ag-${positive ? "pos" : "neg"}`;
-
-  const linePath = "M" + coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" L");
-  const areaPath = linePath + ` L${coords[coords.length - 1].x.toFixed(1)},${(height - 14).toFixed(1)} L${coords[0].x.toFixed(1)},${(height - 14).toFixed(1)} Z`;
+  const color   = positive ? "var(--pos)" : "var(--neg)";
+  const colorHex = positive ? "#34c759"   : "#ff3b30";
+  const line = "M" + coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" L");
+  const area = line + ` L${coords.at(-1).x.toFixed(1)},${height - 10} L${coords[0].x.toFixed(1)},${height - 10} Z`;
 
   const ticks = 4;
   const gridLines = Array.from({ length: ticks }, (_, i) => {
     const frac = i / (ticks - 1);
-    const y = 14 + frac * (height - 28);
-    const price = maxPrice - frac * (maxPrice - minPrice);
-    return { y, label: price.toFixed(0) };
+    return {
+      y: 10 + frac * (height - 20),
+      label: (maxP - frac * (maxP - minP)).toFixed(0),
+    };
   });
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} style={{ display: "block" }}>
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-
-      {/* Grid lines + Y labels */}
       {gridLines.map(({ y, label }, i) => (
         <g key={i}>
-          <line x1="38" y1={y} x2={width - 4} y2={y} stroke="#2a2a2a" strokeWidth="1" />
-          <text x="34" y={y + 3.5} textAnchor="end" fontSize="8" fill="#555" fontFamily="IBM Plex Mono, monospace">
+          <line x1={36} y1={y} x2={width - 4} y2={y} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+          <text x={32} y={y + 3.5} textAnchor="end" fontSize="9"
+            fill="var(--text-3)" fontFamily="system-ui, sans-serif">
             {label}
           </text>
         </g>
       ))}
 
-      {/* Area fill */}
-      <path d={areaPath} fill={`url(#${gradId})`} />
+      <path d={area} fill={colorHex} opacity="0.07" />
+      <path d={line}  fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
 
-      {/* Stroke line */}
-      <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={coords.at(-1).x} cy={coords.at(-1).y} r="2.5" fill={color} />
 
-      {/* X-axis labels */}
-      <text x={coords[0].x} y={height - 2} fontSize="8" fill="#444" fontFamily="IBM Plex Mono, monospace">D-30</text>
-      <text x={coords[coords.length - 1].x} y={height - 2} textAnchor="end" fontSize="8" fill="#444" fontFamily="IBM Plex Mono, monospace">TODAY</text>
-
-      {/* Last-point dot */}
-      <circle cx={coords[coords.length - 1].x} cy={coords[coords.length - 1].y} r="2.5" fill={color} />
+      <text x={coords[0].x} y={height - 1} fontSize="9" fill="var(--text-3)" fontFamily="system-ui, sans-serif">D-30</text>
+      <text x={coords.at(-1).x} y={height - 1} textAnchor="end" fontSize="9" fill="var(--text-3)" fontFamily="system-ui, sans-serif">Today</text>
     </svg>
   );
 }

@@ -1,36 +1,28 @@
 const STYLE = `
-  @keyframes skeleton-shimmer {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-  .skeleton-row td {
-    padding: 10px 12px;
-    border-bottom: 1px solid #1e1e1e;
-  }
-  .skeleton-cell {
-    height: 9px;
+  @keyframes sk-pulse { 0%,100%{opacity:0.35} 50%{opacity:0.6} }
+  .sk-row td { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .sk-cell {
+    height: 10px;
     border-radius: 2px;
-    background: linear-gradient(90deg, #161616 25%, #1c1c1c 50%, #161616 75%);
-    background-size: 200% 100%;
-    animation: skeleton-shimmer 1.4s ease infinite;
+    background: var(--surface-3);
   }
 `;
 
-const WIDTHS = ["68%", "42%", "72%", "52%", "46%", "36%", "42%", "46%", "41%", "58%", "52%", "32%", "62%"];
+const WIDTHS = ["64%","40%","70%","50%","44%","34%","40%","44%","40%","56%","50%","30%","60%"];
 
 export default function SkeletonRows({ count = 8, columnCount = 12 }) {
   return (
     <>
       <style>{STYLE}</style>
-      {Array.from({ length: count }, (_, rowIdx) => (
-        <tr key={rowIdx} className="skeleton-row" style={{ animationDelay: `${rowIdx * 55}ms` }}>
-          {Array.from({ length: columnCount }, (_, colIdx) => (
-            <td key={colIdx}>
+      {Array.from({ length: count }, (_, row) => (
+        <tr key={row} className="sk-row">
+          {Array.from({ length: columnCount }, (_, col) => (
+            <td key={col}>
               <div
-                className="skeleton-cell"
+                className="sk-cell"
                 style={{
-                  width: WIDTHS[(rowIdx + colIdx) % WIDTHS.length],
-                  animationDelay: `${(rowIdx * 60 + colIdx * 20) % 400}ms`,
+                  width: WIDTHS[(row + col) % WIDTHS.length],
+                  animation: `sk-pulse 1.6s ease-in-out ${((row * 60 + col * 20) % 400)}ms infinite`,
                 }}
               />
             </td>

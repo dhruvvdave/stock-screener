@@ -1,177 +1,179 @@
 import SkeletonRows from "./SkeletonRows";
 import Sparkline from "./Sparkline";
 import MomentumDots from "./MomentumDots";
-import { fmt, fmtLarge, fmtVol, volRatio, momentumScore, SECTOR_BADGE_COLOR, SECTOR_ICON } from "../data/stocks";
+import { fmt, fmtLarge, fmtVol, volRatio, momentumScore } from "../data/stocks";
 
 const STYLE = `
-  .table-wrap { flex: 1; overflow: auto; position: relative; }
+  .table-wrap { flex: 1; overflow: auto; }
 
-  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; }
   thead { position: sticky; top: 0; z-index: 10; }
+
   th {
-    background: #111;
-    color: #444;
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    background: var(--surface-2);
+    color: var(--text-3);
+    font-family: var(--font-ui);
+    font-size: 11px;
     font-weight: 500;
-    padding: 9px 12px;
+    padding: 8px 16px;
     text-align: left;
-    border-bottom: 1px solid #222;
-    border-right: 1px solid #1a1a1a;
+    border-bottom: 1px solid var(--border);
     cursor: pointer;
     white-space: nowrap;
     user-select: none;
-    transition: color 0.15s;
+    letter-spacing: 0.03em;
+    transition: color 0.1s;
   }
-  th:hover { color: #f0b429; }
-  th.th-sorted { color: #f0b429; }
-  th.th-right { text-align: right; }
+  th:hover { color: var(--text-2); }
+  th.th-active { color: var(--text-1); }
+  th.th-r { text-align: right; }
 
   td {
-    padding: 8px 12px;
-    border-bottom: 1px solid #1a1a1a;
-    border-right: 1px solid #161616;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
     white-space: nowrap;
     vertical-align: middle;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
   }
-  tbody tr { cursor: pointer; transition: background 0.1s; }
-  tbody tr:hover td { background: #161616; }
-  tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 #f0b429; }
+
+  tbody tr {
+    cursor: pointer;
+    transition: background 0.08s;
+  }
+  tbody tr:hover td { background: var(--surface-3); }
+  tbody tr:hover td.td-first { box-shadow: inset 3px 0 0 var(--accent); }
 
   .ticker-cell { display: flex; flex-direction: column; gap: 2px; }
-  .ticker-sym  { font-weight: 600; color: #f0b429; font-size: 12px; letter-spacing: 0.04em; }
-  .ticker-name { font-size: 9px; color: #444; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
-
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    font-size: 9px;
-    padding: 2px 8px;
-    letter-spacing: 0.05em;
-    border-radius: 999px;
-    border: 1px solid #2a2a2a;
-    color: #555;
+  .ticker-sym  {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 0.02em;
   }
-  .badge-icon { font-size: 8px; font-weight: 700; opacity: 0.6; }
-  .badge-blue   { background: rgba(59,130,246,0.08);  color: #3b82f6; border-color: rgba(59,130,246,0.2); }
-  .badge-yellow { background: rgba(240,180,41,0.08);  color: #f0b429; border-color: rgba(240,180,41,0.2); }
-  .badge-green  { background: rgba(34,197,94,0.08);   color: #22c55e; border-color: rgba(34,197,94,0.2); }
-  .badge-cyan   { background: rgba(6,182,212,0.08);   color: #06b6d4; border-color: rgba(6,182,212,0.2); }
-  .badge-purple { background: rgba(168,85,247,0.08);  color: #a855f7; border-color: rgba(168,85,247,0.2); }
-  .badge-red    { background: rgba(239,68,68,0.08);   color: #ef4444; border-color: rgba(239,68,68,0.2); }
+  .ticker-co {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    color: var(--text-3);
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
-  .chg-pos { color: #22c55e; }
-  .chg-neg { color: #ef4444; }
-  .neutral { color: #555; }
-  .col-r { text-align: right; }
+  .chip {
+    display: inline-block;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    padding: 2px 7px;
+    border: 1px solid var(--border);
+    color: var(--text-3);
+    border-radius: 3px;
+  }
 
-  .vol-bar-wrap { display: flex; align-items: center; gap: 6px; }
-  .vol-bar { height: 2px; background: #222; width: 52px; flex-shrink: 0; }
-  .vol-bar-fill { height: 100%; background: #3b82f6; transition: width 0.4s; }
+  .pos { color: var(--pos); font-family: var(--font-mono); }
+  .neg { color: var(--neg); font-family: var(--font-mono); }
+  .muted { color: var(--text-3); font-family: var(--font-mono); }
+  .num  { font-family: var(--font-mono); color: var(--text-2); }
+
+  .vol-wrap { display: flex; align-items: center; gap: 8px; }
+  .vol-ratio { font-family: var(--font-mono); font-size: 12px; min-width: 32px; }
+  .vol-bar   { width: 48px; height: 2px; background: var(--surface-3); flex-shrink: 0; }
+  .vol-fill  { height: 100%; background: var(--blue); }
 
   .star-btn {
     background: none;
     border: none;
+    font-size: 13px;
     cursor: pointer;
-    font-size: 12px;
-    padding: 0 2px;
+    color: var(--text-3);
+    padding: 0;
     line-height: 1;
-    transition: transform 0.15s;
-    color: #2a2a2a;
+    transition: color 0.1s;
+    display: flex;
+    align-items: center;
   }
-  .star-btn.starred { color: #f0b429; }
-  .star-btn:hover { transform: scale(1.2); }
+  .star-btn:hover  { color: var(--accent); }
+  .star-btn.active { color: var(--accent); }
 
-  .empty-state {
-    padding: 80px;
+  .empty {
+    padding: 80px 40px;
     text-align: center;
-    color: #444;
-    font-size: 11px;
-    letter-spacing: 0.05em;
   }
-  .empty-state h3 { font-size: 14px; color: #333; margin-bottom: 8px; font-weight: 400; }
-
-  @keyframes row-in { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
-  .row-in { animation: row-in 0.18s ease forwards; }
+  .empty-title {
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-3);
+    margin-bottom: 8px;
+  }
+  .empty-sub {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--text-3);
+  }
 `;
 
-function sectorBadge(sector) {
-  const color = SECTOR_BADGE_COLOR[sector];
-  return color ? `badge badge-${color}` : "badge";
-}
-
-function peColor(pe, median) {
-  if (pe == null || median == null) return "#555";
-  return pe < median ? "#22c55e" : "#ef4444";
-}
-
 function SortTh({ label, k, right, sortKey, sortDir, onSort }) {
-  const sorted = sortKey === k;
+  const active = sortKey === k;
   return (
     <th
-      className={`${sorted ? "th-sorted" : ""} ${right ? "th-right" : ""}`}
+      className={`${active ? "th-active" : ""} ${right ? "th-r" : ""}`}
       onClick={() => onSort(k)}
     >
-      {label}{sorted ? (sortDir === -1 ? " ▼" : " ▲") : ""}
+      {label}{active ? (sortDir === -1 ? " ↓" : " ↑") : ""}
     </th>
   );
 }
 
+function peColor(val, median) {
+  if (val == null || median == null) return undefined;
+  return val < median ? "var(--pos)" : "var(--neg)";
+}
+
 export default function ResultsTable({
-  rows,
-  loading,
-  sortKey,
-  sortDir,
-  onSort,
-  onRowClick,
-  onStarClick,
-  watchlist,
-  visibleColumns,
-  sectorMedians,
+  rows, loading, sortKey, sortDir, onSort,
+  onRowClick, onStarClick, watchlist,
+  visibleColumns, sectorMedians,
 }) {
-  // count visible columns for skeleton
-  const baseColCount = 8; // ticker, exch, sector, price, chg, pe, vol/avg, mktcap
-  const optionalCount = [
+  const optCols = [
     visibleColumns.sparkline,
     visibleColumns.pb,
     visibleColumns.epsGrowth,
     visibleColumns.revGrowth,
     visibleColumns.momentum,
   ].filter(Boolean).length;
-  const starCol = 1;
-  const totalCols = baseColCount + optionalCount + starCol;
+  const totalCols = 9 + optCols; // star + ticker + exch + sector + price + chg + pe + vol + mktcap
 
-  const thProps = { sortKey, sortDir, onSort };
+  const sp = { sortKey, sortDir, onSort };
 
   return (
     <>
       <style>{STYLE}</style>
       <div className="table-wrap">
         {rows.length === 0 && !loading ? (
-          <div className="empty-state">
-            <h3>NO RESULTS FOUND</h3>
-            <p>Adjust filters and run a new scan.</p>
+          <div className="empty">
+            <div className="empty-title">No results</div>
+            <div className="empty-sub">Adjust your filters and run a new scan.</div>
           </div>
         ) : (
           <table>
             <thead>
               <tr>
-                <th style={{ width: 28, padding: "9px 8px" }} />
-                <SortTh label="TICKER" k="ticker" {...thProps} />
-                <SortTh label="EXCH"   k="exchange" {...thProps} />
-                <SortTh label="SECTOR" k="sector" {...thProps} />
-                {visibleColumns.sparkline && <th>TREND</th>}
-                <SortTh label="PRICE"  k="price" right {...thProps} />
-                <SortTh label="CHG %"  k="change" right {...thProps} />
-                <SortTh label="P/E"    k="pe" right {...thProps} />
-                {visibleColumns.pb      && <SortTh label="P/B"    k="pb" right {...thProps} />}
-                {visibleColumns.epsGrowth && <SortTh label="EPS GR%" k="epsGrowth" right {...thProps} />}
-                {visibleColumns.revGrowth && <SortTh label="REV GR%" k="revGrowth" right {...thProps} />}
-                <SortTh label="VOL/AVG" k="vol" {...thProps} />
-                <SortTh label="MKT CAP" k="mktCap" right {...thProps} />
-                {visibleColumns.momentum && <th>MOM</th>}
+                <th style={{ width: 32, padding: "8px 12px" }} />
+                <SortTh label="Ticker"   k="ticker"   {...sp} />
+                <SortTh label="Exchange" k="exchange" {...sp} />
+                <SortTh label="Sector"   k="sector"   {...sp} />
+                {visibleColumns.sparkline && <th>Trend</th>}
+                <SortTh label="Price"   k="price"    right {...sp} />
+                <SortTh label="Chg %"   k="change"   right {...sp} />
+                <SortTh label="P/E"     k="pe"       right {...sp} />
+                {visibleColumns.pb       && <SortTh label="P/B"    k="pb"        right {...sp} />}
+                {visibleColumns.epsGrowth && <SortTh label="EPS Gr%" k="epsGrowth" right {...sp} />}
+                {visibleColumns.revGrowth && <SortTh label="Rev Gr%" k="revGrowth" right {...sp} />}
+                <SortTh label="Vol/Avg" k="vol"      {...sp} />
+                <SortTh label="Mkt Cap" k="mktCap"   right {...sp} />
+                {visibleColumns.momentum && <th>Momentum</th>}
               </tr>
             </thead>
             <tbody>
@@ -179,83 +181,72 @@ export default function ResultsTable({
                 <SkeletonRows count={8} columnCount={totalCols} />
               ) : (
                 rows.map((s, i) => {
-                  const chgPos = s.change >= 0;
-                  const vr = volRatio(s);
-                  const vrPct = Math.min(vr / 3, 1);
-                  const mom = momentumScore(s);
-                  const isStarred = watchlist.includes(s.ticker);
-                  const peClr = peColor(s.pe, sectorMedians[s.sector]?.pe);
-                  const pbClr = peColor(s.pb, sectorMedians[s.sector]?.pb);
+                  const chgPos  = s.change >= 0;
+                  const vr      = volRatio(s);
+                  const vrPct   = Math.min(vr / 3, 1);
+                  const mom     = momentumScore(s);
+                  const starred = watchlist.includes(s.ticker);
+                  const peClr   = peColor(s.pe, sectorMedians[s.sector]?.pe);
+                  const pbClr   = peColor(s.pb, sectorMedians[s.sector]?.pb);
 
                   return (
-                    <tr
-                      key={s.ticker}
-                      className="row-in"
-                      style={{ animationDelay: `${Math.min(i * 18, 300)}ms` }}
-                      onClick={() => onRowClick(s)}
-                    >
-                      <td style={{ padding: "8px 8px", width: 28 }}>
+                    <tr key={s.ticker} onClick={() => onRowClick(s)}>
+                      <td className="td-first" style={{ padding: "10px 12px", width: 32 }}>
                         <button
-                          className={`star-btn ${isStarred ? "starred" : ""}`}
+                          className={`star-btn ${starred ? "active" : ""}`}
                           onClick={e => { e.stopPropagation(); onStarClick(s.ticker); }}
-                          title={isStarred ? "Remove from watchlist" : "Add to watchlist"}
                         >
-                          {isStarred ? "★" : "☆"}
+                          {starred ? "★" : "☆"}
                         </button>
                       </td>
-                      <td>
+                      <td className="td-first">
                         <div className="ticker-cell">
                           <span className="ticker-sym">{s.ticker}</span>
-                          <span className="ticker-name">{s.name}</span>
+                          <span className="ticker-co">{s.name}</span>
                         </div>
                       </td>
-                      <td><span className="badge">{s.exchange}</span></td>
-                      <td>
-                        <span className={sectorBadge(s.sector)}>
-                          <span className="badge-icon">{SECTOR_ICON[s.sector]}</span>
-                          {s.sector}
-                        </span>
-                      </td>
+                      <td><span className="chip">{s.exchange}</span></td>
+                      <td><span className="chip">{s.sector}</span></td>
                       {visibleColumns.sparkline && (
-                        <td style={{ padding: "4px 10px" }}>
+                        <td style={{ padding: "6px 12px" }}>
                           <Sparkline positive={chgPos} seed={i} />
                         </td>
                       )}
-                      <td className="col-r" style={{ fontWeight: 500 }}>
+                      <td className="th-r" style={{ fontWeight: 500, color: "var(--text-1)", textAlign: "right" }}>
                         ${fmt(s.price, s.price < 10 ? 3 : 2)}
                       </td>
-                      <td className={`col-r ${chgPos ? "chg-pos" : "chg-neg"}`}>
+                      <td style={{ textAlign: "right" }} className={chgPos ? "pos" : "neg"}>
                         {chgPos ? "+" : ""}{fmt(s.change)}%
                       </td>
-                      <td className="col-r" style={{ color: peClr }}>
+                      <td style={{ textAlign: "right", color: peClr ?? "var(--text-2)" }} className="num">
                         {fmt(s.pe, 1)}
                       </td>
                       {visibleColumns.pb && (
-                        <td className="col-r" style={{ color: pbClr }}>
+                        <td style={{ textAlign: "right", color: pbClr ?? "var(--text-2)" }} className="num">
                           {fmt(s.pb, 1)}
                         </td>
                       )}
                       {visibleColumns.epsGrowth && (
-                        <td className={`col-r ${s.epsGrowth > 0 ? "chg-pos" : s.epsGrowth < 0 ? "chg-neg" : "neutral"}`}>
+                        <td style={{ textAlign: "right" }} className={s.epsGrowth > 0 ? "pos" : s.epsGrowth < 0 ? "neg" : "muted"}>
                           {s.epsGrowth != null ? (s.epsGrowth > 0 ? "+" : "") + s.epsGrowth + "%" : "—"}
                         </td>
                       )}
                       {visibleColumns.revGrowth && (
-                        <td className={`col-r ${s.revGrowth > 0 ? "chg-pos" : "chg-neg"}`}>
+                        <td style={{ textAlign: "right" }} className={s.revGrowth > 0 ? "pos" : "neg"}>
                           {s.revGrowth > 0 ? "+" : ""}{s.revGrowth}%
                         </td>
                       )}
                       <td>
-                        <div className="vol-bar-wrap">
-                          <span style={{ fontSize: "10px", color: vr > 1.5 ? "#f0b429" : "#444", minWidth: 30 }}>
-                            {fmt(vr, 1)}x
+                        <div className="vol-wrap">
+                          <span className="vol-ratio" style={{ color: vr > 1.5 ? "var(--accent)" : "var(--text-2)" }}>
+                            {fmt(vr, 1)}×
                           </span>
                           <div className="vol-bar">
-                            <div className="vol-bar-fill" style={{ width: `${vrPct * 100}%` }} />
+                            <div className="vol-fill" style={{ width: `${vrPct * 100}%` }} />
                           </div>
                         </div>
                       </td>
-                      <td className="col-r">{fmtLarge(s.mktCap)}</td>
+                      <td style={{ textAlign: "right" }} className="num">{fmtLarge(s.mktCap)}</td>
                       {visibleColumns.momentum && (
                         <td><MomentumDots score={mom} /></td>
                       )}

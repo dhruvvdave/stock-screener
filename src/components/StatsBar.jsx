@@ -4,36 +4,50 @@ import { momentumScore } from "../data/stocks";
 const STYLE = `
   .stats-bar {
     display: flex;
-    border-bottom: 1px solid #2a2a2a;
-    background: #111;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-1);
     overflow-x: auto;
+    animation: sb-in 0.25s ease forwards;
   }
-  .stat-cell {
-    padding: 10px 22px;
-    border-right: 1px solid #2a2a2a;
-    min-width: 130px;
-    opacity: 0;
-    transform: translateY(8px);
-    animation: stat-appear 0.4s ease forwards;
-  }
-  .stat-cell:nth-child(1) { animation-delay: 0ms; }
-  .stat-cell:nth-child(2) { animation-delay: 70ms; }
-  .stat-cell:nth-child(3) { animation-delay: 140ms; }
-  .stat-cell:nth-child(4) { animation-delay: 210ms; }
-  @keyframes stat-appear { to { opacity: 1; transform: translateY(0); } }
+  @keyframes sb-in { from { opacity: 0; } to { opacity: 1; } }
 
-  .stat-label { font-size: 9px; color: #555; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 4px; font-family: 'IBM Plex Sans', sans-serif; }
-  .stat-val   { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
-  .stat-sub   { font-size: 9px; color: #444; margin-top: 2px; }
+  .stat-cell {
+    padding: 12px 20px;
+    border-right: 1px solid var(--border);
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+  .stat-label {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-3);
+    margin-bottom: 4px;
+    letter-spacing: 0;
+  }
+  .stat-val {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .stat-sub {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 2px;
+    letter-spacing: 0;
+  }
 `;
 
-function StatCell({ label, value, color, sub, animKey }) {
-  const displayed = useCountUp(typeof value === "number" ? value : 0, 700);
+function StatCell({ label, value, color, sub }) {
+  const displayed = useCountUp(typeof value === "number" ? Math.round(value) : 0, 600);
   return (
-    <div className="stat-cell" key={animKey}>
+    <div className="stat-cell">
       <div className="stat-label">{label}</div>
       <div className="stat-val" style={{ color }}>{displayed}</div>
-      <div className="stat-sub">{sub}</div>
+      {sub && <div className="stat-sub">{sub}</div>}
     </div>
   );
 }
@@ -43,7 +57,7 @@ export default function StatsBar({ results, totalCount, visible }) {
 
   const greenCount = results.filter(s => s.change >= 0).length;
   const avgChange = results.length
-    ? (results.reduce((a, s) => a + s.change, 0) / results.length)
+    ? results.reduce((a, s) => a + s.change, 0) / results.length
     : 0;
   const highMom = results.filter(s => momentumScore(s) >= 4).length;
 
@@ -54,27 +68,26 @@ export default function StatsBar({ results, totalCount, visible }) {
         <StatCell
           label="Results"
           value={results.length}
-          color="#f0b429"
-          sub={`of ${totalCount} scanned`}
+          color="var(--accent)"
+          sub={`of ${totalCount} total`}
         />
         <StatCell
           label="Advancing"
           value={greenCount}
-          color="#22c55e"
-          sub={`${results.length ? ((greenCount / results.length) * 100).toFixed(0) : 0}% of results`}
+          color="var(--pos)"
+          sub={`${results.length ? Math.round((greenCount / results.length) * 100) : 0}% of results`}
         />
         <div className="stat-cell">
           <div className="stat-label">Avg Change</div>
-          <div className="stat-val" style={{ color: avgChange >= 0 ? "#22c55e" : "#ef4444" }}>
+          <div className="stat-val" style={{ color: avgChange >= 0 ? "var(--pos)" : "var(--neg)" }}>
             {avgChange >= 0 ? "+" : ""}{avgChange.toFixed(2)}%
           </div>
-          <div className="stat-sub">session avg</div>
         </div>
         <StatCell
           label="High Momentum"
           value={highMom}
-          color="#06b6d4"
-          sub="score ≥ 4 / 5"
+          color="var(--text-1)"
+          sub="score ≥ 4/5"
         />
       </div>
     </>
