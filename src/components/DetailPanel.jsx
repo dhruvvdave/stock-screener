@@ -206,7 +206,7 @@ export default function DetailPanel({
   stock, onClose, watchlist, onStarClick,
   volRatio, momentumScore, sectorMedians,
   currency, usdToCadRate,
-  candleData, supplementary, claudeKey,
+  candleData, supplementary,
 }) {
   const s       = stock;
   const open    = !!s;
@@ -360,7 +360,6 @@ export default function DetailPanel({
               stock={s}
               analystData={supplementary?.analyst ?? null}
               sentiment={supplementary?.sentiment ?? null}
-              claudeKey={claudeKey}
             />
           </>
         )}

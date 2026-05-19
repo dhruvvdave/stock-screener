@@ -167,7 +167,7 @@ const SIG_CLS   = { buy: "sig-buy", sell: "sig-sell", hold: "sig-hold", watch: "
 const SIG_LABEL = { buy: "BUY", sell: "SELL", hold: "HOLD", watch: "WATCH" };
 const SENT_CLS  = { bullish: "sent-bullish", bearish: "sent-bearish", neutral: "sent-neutral" };
 
-export default function AIInsights({ stock, analystData, sentiment, claudeKey }) {
+export default function AIInsights({ stock, analystData, sentiment }) {
   const [status, setStatus]   = useState("idle");  // idle | loading | done | error
   const [result, setResult]   = useState(null);
   const [errMsg, setErrMsg]   = useState("");
@@ -184,7 +184,7 @@ export default function AIInsights({ stock, analystData, sentiment, claudeKey })
     setResult(null);
     setErrMsg("");
     try {
-      const r = await generateAIAnalysis(stock, analystData, sentiment, claudeKey);
+      const r = await generateAIAnalysis(stock, analystData, sentiment);
       setResult(r);
       setStatus("done");
     } catch (e) {
@@ -193,7 +193,6 @@ export default function AIInsights({ stock, analystData, sentiment, claudeKey })
     }
   };
 
-  const hasKey    = !!claudeKey;
   const hasResult = status === "done" && result;
 
   return (
@@ -202,18 +201,10 @@ export default function AIInsights({ stock, analystData, sentiment, claudeKey })
       <div className="ai-wrap">
         <div className="ai-hd">
           <span className="ai-title">AI Analysis</span>
-          {hasKey && (
-            <button className="ai-gen-btn" onClick={generate} disabled={status === "loading"}>
-              {status === "loading" ? "Analyzing…" : hasResult ? "Regenerate" : "Generate"}
-            </button>
-          )}
+          <button className="ai-gen-btn" onClick={generate} disabled={status === "loading"}>
+            {status === "loading" ? "Analyzing…" : hasResult ? "Regenerate" : "Generate"}
+          </button>
         </div>
-
-        {!hasKey && (
-          <p className="ai-prompt">
-            Add your Claude API key in ⚙ Settings to generate market analysis, forecasts, and signals.
-          </p>
-        )}
 
         {status === "loading" && (
           <>

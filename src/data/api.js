@@ -1,11 +1,9 @@
-const FINNHUB_BASE = "https://finnhub.io/api/v1";
-
 // Finnhub symbol map — Canadian stocks use .TO suffix on Finnhub
 export const FINNHUB_SYMBOLS = {
   SHOP:    "SHOP.TO", CNQ:  "CNQ.TO",  RY:   "RY.TO",  TD:  "TD.TO",
   ATD:     "ATD.TO",  SU:   "SU.TO",   BCE:  "BCE.TO",  ENB: "ENB.TO",
   NTR:     "NTR.TO",  ABX:  "ABX.TO",  CP:   "CP.TO",
-  "GSI.V": "GSI.V",  // TSX-V — may not be in Finnhub free tier
+  "GSI.V": "GSI.V",
   JPM:  "JPM",  XOM:  "XOM", LLY: "LLY", JNJ: "JNJ",
   CAT:  "CAT",  WMT:  "WMT", UEC: "UEC",
   AAPL: "AAPL", NVDA: "NVDA", MSFT: "MSFT",
@@ -24,91 +22,60 @@ export async function fetchExchangeRate() {
   }
 }
 
-// ── Finnhub quotes ─────────────────────────────────────────────────────────
+// ── Finnhub quotes via /api/quotes proxy ───────────────────────────────────
 
-async function fetchOneQuote(finnhubSymbol, key) {
-  const r = await fetch(`${FINNHUB_BASE}/quote?symbol=${finnhubSymbol}&token=${key}`);
-  const d = await r.json();
-  if (d.error || !d.c || d.c === 0) return null;
-  return { price: d.c, change: +(d.dp ?? 0).toFixed(2) };
-}
-
-// Fetches all quotes in chunks of 10 with ~1.1s gap to stay under 60 req/min
-export async function fetchAllQuotes(tickers, key) {
-  const results = new Map();
-  const CHUNK = 10;
-  for (let i = 0; i < tickers.length; i += CHUNK) {
-    const chunk = tickers.slice(i, i + CHUNK);
-    const settled = await Promise.allSettled(
-      chunk.map(t => fetchOneQuote(FINNHUB_SYMBOLS[t] ?? t, key))
-    );
-    settled.forEach((r, idx) => {
-      if (r.status === "fulfilled" && r.value !== null) results.set(chunk[idx], r.value);
+export async function fetchAllQuotes(tickers) {
+  const symbols = tickers.map(t => FINNHUB_SYMBOLS[t] ?? t);
+  try {
+    const r = await fetch(`/api/quotes?symbols=${symbols.join(",")}`);
+    if (!r.ok) return new Map();
+    const data = await r.json();
+    const result = new Map();
+    tickers.forEach(t => {
+      const sym = FINNHUB_SYMBOLS[t] ?? t;
+      if (data[sym]) result.set(t, data[sym]);
     });
-    if (i + CHUNK < tickers.length) await new Promise(r => setTimeout(r, 1100));
+    return result;
+  } catch {
+    return new Map();
   }
-  return results;
 }
 
-// ── Candle / historical data ───────────────────────────────────────────────
+// ── Candle / historical data via /api/candle proxy ────────────────────────
 
-// Returns array of closing prices (most recent 30 trading days) or null
-export async function fetchCandleData(ticker, key) {
+export async function fetchCandleData(ticker) {
   const symbol = FINNHUB_SYMBOLS[ticker] ?? ticker;
-  const to   = Math.floor(Date.now() / 1000);
-  const from = to - 42 * 24 * 60 * 60; // 42 calendar days ≈ 30 trading days
   try {
-    const r = await fetch(
-      `${FINNHUB_BASE}/stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${to}&token=${key}`
-    );
+    const r = await fetch(`/api/candle?symbol=${encodeURIComponent(symbol)}`);
+    if (!r.ok) return null;
     const d = await r.json();
-    if (d.s !== "ok" || !Array.isArray(d.c) || d.c.length < 2) return null;
-    return d.c.slice(-30); // keep last 30 points
+    return d.prices ?? null;
   } catch {
     return null;
   }
 }
 
-// ── Analyst data ───────────────────────────────────────────────────────────
+// ── Analyst data via /api/analyst proxy ───────────────────────────────────
 
-export async function fetchAnalystData(ticker, key) {
+export async function fetchAnalystData(ticker) {
   const symbol = FINNHUB_SYMBOLS[ticker] ?? ticker;
   try {
-    const [recRes, tgtRes] = await Promise.all([
-      fetch(`${FINNHUB_BASE}/stock/recommendation?symbol=${symbol}&token=${key}`),
-      fetch(`${FINNHUB_BASE}/stock/price-target?symbol=${symbol}&token=${key}`),
-    ]);
-    const [rec, tgt] = await Promise.all([recRes.json(), tgtRes.json()]);
-    const latest = Array.isArray(rec) && rec.length > 0
-      ? [...rec].sort((a, b) => b.period.localeCompare(a.period))[0]
-      : null;
-    return {
-      buy:        (latest?.buy ?? 0) + (latest?.strongBuy ?? 0),
-      hold:       latest?.hold ?? 0,
-      sell:       (latest?.sell ?? 0) + (latest?.strongSell ?? 0),
-      total:      (latest?.buy ?? 0) + (latest?.strongBuy ?? 0) + (latest?.hold ?? 0)
-                + (latest?.sell ?? 0) + (latest?.strongSell ?? 0),
-      meanTarget: tgt?.targetMean ?? null,
-      highTarget: tgt?.targetHigh ?? null,
-      lowTarget:  tgt?.targetLow ?? null,
-    };
+    const r = await fetch(`/api/analyst?symbol=${encodeURIComponent(symbol)}`);
+    if (!r.ok) return null;
+    return await r.json();
   } catch {
     return null;
   }
 }
 
-// ── News sentiment ─────────────────────────────────────────────────────────
+// ── News sentiment via /api/sentiment proxy ───────────────────────────────
 
-export async function fetchNewsSentiment(ticker, key) {
+export async function fetchNewsSentiment(ticker) {
   const symbol = FINNHUB_SYMBOLS[ticker] ?? ticker;
   try {
-    const r = await fetch(`${FINNHUB_BASE}/news-sentiment?symbol=${symbol}&token=${key}`);
-    const d = await r.json();
-    return {
-      bullish:  d.sentiment?.bullishPercent ?? null,
-      bearish:  d.sentiment?.bearishPercent ?? null,
-      articles: d.buzz?.articlesInLastWeek ?? 0,
-    };
+    const r = await fetch(`/api/sentiment?symbol=${encodeURIComponent(symbol)}`);
+    if (!r.ok) return null;
+    return await r.json();
   } catch {
     return null;
   }
@@ -120,7 +87,6 @@ export function isCADExchange(exchange) {
   return exchange === "TSX" || exchange === "TSX-V";
 }
 
-// Returns the display price and whether it was converted from another currency
 export function convertPrice(price, exchange, displayCurrency, usdToCad) {
   const cad = isCADExchange(exchange);
   if (displayCurrency === "CAD" && !cad) return { price: price * usdToCad,  converted: true };
@@ -128,7 +94,6 @@ export function convertPrice(price, exchange, displayCurrency, usdToCad) {
   return { price, converted: false };
 }
 
-// Convert a filter price bound from display currency to the stock's native currency
 export function filterBoundToNative(bound, exchange, displayCurrency, usdToCad) {
   if (!bound) return null;
   const cad = isCADExchange(exchange);
@@ -138,9 +103,9 @@ export function filterBoundToNative(bound, exchange, displayCurrency, usdToCad) 
   return n;
 }
 
-// ── AI analysis via Claude API ─────────────────────────────────────────────
+// ── AI analysis via /api/analyze proxy ────────────────────────────────────
 
-export async function generateAIAnalysis(stock, analystData, sentiment, claudeKey) {
+export async function generateAIAnalysis(stock, analystData, sentiment) {
   const a    = analystData ?? {};
   const sent = sentiment ?? {};
 
@@ -178,25 +143,16 @@ Reply with this exact JSON:
 
 forecast30d should be realistic price levels in the stock's native currency based on analyst targets and momentum.`;
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/analyze", {
     method: "POST",
-    headers: {
-      "x-api-key":                    claudeKey,
-      "anthropic-version":            "2023-06-01",
-      "content-type":                 "application/json",
-      "anthropic-dangerous-allow-browser": "true",
-    },
-    body: JSON.stringify({
-      model:      "claude-haiku-4-5-20251001",
-      max_tokens: 500,
-      messages:   [{ role: "user", content: prompt }],
-    }),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ prompt }),
   });
 
   const d = await res.json();
-  if (d.error) throw new Error(d.error.message ?? "Anthropic API error");
+  if (d.error) throw new Error(d.error);
 
-  const text = d.content?.[0]?.text ?? "";
+  const text = d.text ?? "";
   try {
     return JSON.parse(text);
   } catch {

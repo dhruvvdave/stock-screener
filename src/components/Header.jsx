@@ -129,21 +129,6 @@ const STYLE = `
     letter-spacing: 0.02em;
   }
 
-  /* Settings gear */
-  .hdr-gear {
-    background: none;
-    border: none;
-    color: var(--text-3);
-    cursor: pointer;
-    font-size: 14px;
-    padding: 0;
-    line-height: 1;
-    transition: color 0.1s;
-    flex-shrink: 0;
-    touch-action: manipulation;
-  }
-  .hdr-gear:hover { color: var(--text-2); }
-
   /* Mobile filter button — hidden on desktop */
   .hdr-filter-btn {
     display: none;
@@ -189,7 +174,7 @@ const STYLE = `
 
 export default function Header({
   clock, watchlistCount, currency, onCurrencyToggle,
-  onSettingsOpen, quotesLoading, onFiltersOpen, activeFilterCount,
+  quotesLoading, onFiltersOpen, activeFilterCount,
 }) {
   return (
     <>
@@ -239,8 +224,6 @@ export default function Header({
               <span>{watchlistCount}</span>
             </div>
           )}
-
-          <button className="hdr-gear" onClick={onSettingsOpen} title="API Settings">⚙</button>
 
           <div className="hdr-status">
             <div className={`hdr-dot ${quotesLoading ? "loading" : ""}`} />

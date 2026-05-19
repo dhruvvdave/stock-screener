@@ -6,7 +6,6 @@ import StatsBar      from "./components/StatsBar";
 import Toolbar       from "./components/Toolbar";
 import ResultsTable  from "./components/ResultsTable";
 import DetailPanel   from "./components/DetailPanel";
-import SettingsModal from "./components/SettingsModal";
 
 import { useLocalStorage } from "./hooks/useLocalStorage";
 import { useDebounce }     from "./hooks/useDebounce";
@@ -27,15 +26,12 @@ const STYLE = `
 export default function StockScreener() {
   const [clock, setClock]             = useState("");
   const [filtersOpen,  setFiltersOpen]  = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Persisted preferences
   const [filters,        setFilters]        = useLocalStorage("mktscan_filters",   DEFAULT_FILTERS);
   const [watchlist,      setWatchlist]       = useLocalStorage("mktscan_watchlist", []);
   const [visibleColumns, setVisibleColumns]  = useLocalStorage("mktscan_cols",      DEFAULT_COLUMNS);
   const [currency,       setCurrency]        = useLocalStorage("mktscan_currency",  "USD");
-  const [finnhubKey,     setFinnhubKey]      = useLocalStorage("mktscan_finnhub_key", "");
-  const [claudeKey,      setClaudeKey]       = useLocalStorage("mktscan_claude_key",  "");
 
   // Live data
   const [usdToCad,       setUsdToCad]      = useState(1.36);
@@ -83,7 +79,7 @@ export default function StockScreener() {
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e) => {
-      if (e.key === "Escape") { setSelected(null); setFiltersOpen(false); setSettingsOpen(false); }
+      if (e.key === "Escape") { setSelected(null); setFiltersOpen(false); }
       if (e.key === "/" && document.activeElement?.tagName !== "INPUT") {
         e.preventDefault();
         searchRef.current?.focus();
@@ -98,41 +94,40 @@ export default function StockScreener() {
     fetchExchangeRate().then(setUsdToCad);
   }, []);
 
-  // Fetch live quotes when Finnhub key is set
+  // Fetch live quotes on mount
   useEffect(() => {
-    if (!finnhubKey) return;
     setQuotesLoading(true);
     const tickers = STOCKS.map(s => s.ticker);
-    fetchAllQuotes(tickers, finnhubKey)
+    fetchAllQuotes(tickers)
       .then(map => {
         const obj = {};
         map.forEach((v, k) => { obj[k] = v; });
         setLiveQuotes(obj);
       })
       .finally(() => setQuotesLoading(false));
-  }, [finnhubKey]);
+  }, []);
 
   // Lazy-fetch candle + supplementary data when detail panel opens
   useEffect(() => {
-    if (!selected || !finnhubKey) return;
+    if (!selected) return;
     const ticker = selected.ticker;
 
     if (candleCache[ticker] === undefined) {
       setCandleCache(c => ({ ...c, [ticker]: null }));   // mark as fetching
-      fetchCandleData(ticker, finnhubKey).then(data => {
+      fetchCandleData(ticker).then(data => {
         setCandleCache(c => ({ ...c, [ticker]: data }));
       });
     }
 
     if (!suppCache[ticker]) {
       Promise.all([
-        fetchAnalystData(ticker, finnhubKey),
-        fetchNewsSentiment(ticker, finnhubKey),
+        fetchAnalystData(ticker),
+        fetchNewsSentiment(ticker),
       ]).then(([analyst, sentiment]) => {
         setSuppCache(c => ({ ...c, [ticker]: { analyst, sentiment } }));
       });
     }
-  }, [selected?.ticker, finnhubKey]);  // eslint-disable-line
+  }, [selected?.ticker]);  // eslint-disable-line
 
   const runScan = useCallback(() => {
     setLoading(true);
@@ -143,7 +138,6 @@ export default function StockScreener() {
       const out = stocksWithLive.filter(s => {
         if (!f.exchanges.includes(s.exchange)) return false;
         if (!f.sectors.includes(s.sector))    return false;
-        // Convert filter bounds from display currency to the stock's native currency
         const toNative = (v) => filterBoundToNative(v, s.exchange, currency, usdToCad);
         if (f.minPrice     && s.price    < toNative(f.minPrice))                             return false;
         if (f.maxPrice     && s.price    > toNative(f.maxPrice))                             return false;
@@ -171,8 +165,7 @@ export default function StockScreener() {
     const ccy = currency;
     const headers = ["Ticker","Name","Exchange","Sector",`Price (${ccy})`,"Change%","PE","PB","EPS Gr%","Rev Gr%","Vol","Avg Vol","Mkt Cap ($B)"];
     const rows = sorted.map(s => {
-      const { price: dp } = { price: s.price };  // native price in CSV
-      return [s.ticker, `"${s.name}"`, s.exchange, s.sector, dp, s.change, s.pe ?? "", s.pb, s.epsGrowth ?? "", s.revGrowth, s.vol, s.avgVol, s.mktCap];
+      return [s.ticker, `"${s.name}"`, s.exchange, s.sector, s.price, s.change, s.pe ?? "", s.pb, s.epsGrowth ?? "", s.revGrowth, s.vol, s.avgVol, s.mktCap];
     });
     const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
     const a = Object.assign(document.createElement("a"), {
@@ -182,15 +175,6 @@ export default function StockScreener() {
     a.click();
     URL.revokeObjectURL(a.href);
   }, [sorted, currency]);
-
-  const handleSaveSettings = useCallback(({ finnhub, claude }) => {
-    setFinnhubKey(finnhub);
-    setClaudeKey(claude);
-    // Clear caches so data is re-fetched with the new key
-    setLiveQuotes({});
-    setCandleCache({});
-    setSuppCache({});
-  }, [setFinnhubKey, setClaudeKey]);
 
   const handleStarClick = useCallback((t) => {
     setWatchlist(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
@@ -205,7 +189,6 @@ export default function StockScreener() {
           watchlistCount={watchlist.length}
           currency={currency}
           onCurrencyToggle={setCurrency}
-          onSettingsOpen={() => setSettingsOpen(true)}
           onFiltersOpen={() => setFiltersOpen(true)}
           activeFilterCount={activeFilterCount}
           quotesLoading={quotesLoading}
@@ -268,15 +251,6 @@ export default function StockScreener() {
         usdToCadRate={usdToCad}
         candleData={selected ? (candleCache[selected.ticker] ?? null) : null}
         supplementary={selected ? (suppCache[selected.ticker] ?? null) : null}
-        claudeKey={claudeKey}
-      />
-
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        finnhubKey={finnhubKey}
-        claudeKey={claudeKey}
-        onSave={handleSaveSettings}
       />
     </>
   );
