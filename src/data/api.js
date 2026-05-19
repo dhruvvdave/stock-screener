@@ -26,19 +26,15 @@ export async function fetchExchangeRate() {
 
 export async function fetchAllQuotes(tickers) {
   const symbols = tickers.map(t => FINNHUB_SYMBOLS[t] ?? t);
-  try {
-    const r = await fetch(`/api/quotes?symbols=${symbols.join(",")}`);
-    if (!r.ok) return new Map();
-    const data = await r.json();
-    const result = new Map();
-    tickers.forEach(t => {
-      const sym = FINNHUB_SYMBOLS[t] ?? t;
-      if (data[sym]) result.set(t, data[sym]);
-    });
-    return result;
-  } catch {
-    return new Map();
-  }
+  const r = await fetch(`/api/quotes?symbols=${symbols.join(",")}`);
+  if (!r.ok) throw new Error(`quotes API ${r.status}`);
+  const data = await r.json();
+  const result = new Map();
+  tickers.forEach(t => {
+    const sym = FINNHUB_SYMBOLS[t] ?? t;
+    if (data[sym]) result.set(t, data[sym]);
+  });
+  return result;
 }
 
 // ── Candle / historical data via /api/candle proxy ────────────────────────

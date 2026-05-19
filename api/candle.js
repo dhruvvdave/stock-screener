@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
 
-  const key = process.env.FINNHUB_KEY;
+  const key = process.env.FINNHUB_KEY || process.env.FINNHUB_API_KEY;
   if (!key) return res.status(503).json({ prices: null });
 
   const { symbol } = req.query;
