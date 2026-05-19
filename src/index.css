@@ -1,35 +1,39 @@
-/* Design token foundation */
 :root {
-  --bg:        #080808;
-  --surface-1: #0f0f0f;
-  --surface-2: #141414;
-  --surface-3: #1a1a1a;
-  --border:    rgba(255, 255, 255, 0.06);
-  --border-2:  rgba(255, 255, 255, 0.10);
+  --bg:        #070707;
+  --surface-1: #0d0d0d;
+  --surface-2: #121212;
+  --surface-3: #181818;
+  --surface-4: #1e1e1e;
 
-  --text-1:    #f0f0f0;
-  --text-2:    #888888;
-  --text-3:    #444444;
+  --border:    rgba(255, 255, 255, 0.055);
+  --border-2:  rgba(255, 255, 255, 0.10);
+  --border-3:  rgba(255, 255, 255, 0.16);
+
+  --text-1:    #ececec;
+  --text-2:    #7a7a7a;
+  --text-3:    #3d3d3d;
 
   --accent:    #e8a020;
-  --pos:       #34c759;
-  --neg:       #ff3b30;
-  --blue:      #3b82f6;
+  --accent-dim: rgba(232, 160, 32, 0.12);
+  --pos:       #30d158;
+  --pos-dim:   rgba(48, 209, 88, 0.10);
+  --neg:       #ff453a;
+  --neg-dim:   rgba(255, 69, 58, 0.10);
+  --blue:      #0a84ff;
 
   --font-ui:   system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', 'Roboto Mono', monospace;
+
+  --radius:    3px;
+  --header-h:  48px;
 }
 
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   background: var(--bg);
   color: var(--text-1);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -45,5 +49,6 @@ body {
 }
 
 ::-webkit-scrollbar        { width: 4px; height: 4px; }
-::-webkit-scrollbar-track  { background: var(--bg); }
-::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.08); border-radius: 2px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.07); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.13); }

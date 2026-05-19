@@ -1,16 +1,16 @@
 const MARKET_DATA = [
-  { label: "SPY",  price: "512.84", change: "+0.32%", pos: true },
-  { label: "QQQ",  price: "441.22", change: "+0.61%", pos: true },
-  { label: "TSX",  price: "22,847", change: "+0.18%", pos: true },
+  { label: "SPY",  price: "512.84", change: "+0.32%", pos: true  },
+  { label: "QQQ",  price: "441.22", change: "+0.61%", pos: true  },
+  { label: "TSX",  price: "22,847", change: "+0.18%", pos: true  },
   { label: "VIX",  price: "13.40",  change: "−2.10%", pos: false },
 ];
 
 const STYLE = `
-  .header {
+  .hdr {
     display: flex;
     align-items: center;
-    height: 44px;
-    padding: 0 24px;
+    height: var(--header-h);
+    padding: 0 20px;
     border-bottom: 1px solid var(--border);
     background: var(--surface-1);
     position: sticky;
@@ -19,98 +19,98 @@ const STYLE = `
     gap: 0;
   }
 
-  .logo {
+  .hdr-logo {
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--accent);
-    letter-spacing: 0.04em;
-    white-space: nowrap;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     flex-shrink: 0;
+    user-select: none;
   }
-  .logo-sep {
-    color: var(--text-3);
-    font-weight: 300;
-    margin: 0 1px;
-  }
+  .hdr-logo-slash { color: var(--text-3); font-weight: 400; margin: 0 1px; }
 
-  .header-divider {
+  .hdr-sep {
     width: 1px;
-    height: 16px;
+    height: 18px;
     background: var(--border);
-    margin: 0 20px;
+    margin: 0 18px;
     flex-shrink: 0;
   }
 
-  .market-pills {
+  .hdr-markets {
     display: flex;
-    gap: 4px;
+    align-items: center;
+    gap: 0;
     flex: 1;
     min-width: 0;
     overflow: hidden;
   }
-  .market-pill {
+  .hdr-pill {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 10px;
-    border: 1px solid var(--border);
-    background: transparent;
-    white-space: nowrap;
+    gap: 7px;
+    padding: 0 14px;
+    height: var(--header-h);
+    border-right: 1px solid var(--border);
     flex-shrink: 0;
   }
-  .mp-label {
+  .hdr-pill:first-child { border-left: 1px solid var(--border); }
+  .hdr-pill-label {
     font-family: var(--font-ui);
     font-size: 11px;
     font-weight: 500;
     color: var(--text-3);
-    letter-spacing: 0.02em;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
   }
-  .mp-price {
+  .hdr-pill-price {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-1);
     font-variant-numeric: tabular-nums;
   }
-  .mp-change {
+  .hdr-pill-chg {
     font-family: var(--font-mono);
     font-size: 11px;
     font-variant-numeric: tabular-nums;
   }
-  .mp-pos { color: var(--pos); }
-  .mp-neg { color: var(--neg); }
+  .chg-pos { color: var(--pos); }
+  .chg-neg { color: var(--neg); }
 
-  .header-right {
+  .hdr-right {
     display: flex;
     align-items: center;
     gap: 16px;
     flex-shrink: 0;
-    margin-left: 20px;
+    margin-left: 18px;
   }
 
-  .wl-count {
+  .hdr-wl {
+    display: flex;
+    align-items: center;
+    gap: 5px;
     font-family: var(--font-ui);
     font-size: 12px;
     color: var(--text-2);
-    display: flex;
-    align-items: center;
-    gap: 4px;
+    cursor: default;
   }
-  .wl-star { color: var(--accent); font-size: 11px; }
+  .hdr-wl-star { color: var(--accent); font-size: 10px; }
 
-  .status-row {
+  .hdr-status {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
   }
-  .status-dot {
+  .hdr-dot {
     width: 5px;
     height: 5px;
     border-radius: 50%;
     background: var(--pos);
     flex-shrink: 0;
   }
-  .clock {
+  .hdr-clock {
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--text-3);
@@ -123,34 +123,36 @@ export default function Header({ clock, watchlistCount }) {
   return (
     <>
       <style>{STYLE}</style>
-      <div className="header">
-        <div className="logo">MKTSCAN<span className="logo-sep">/</span>PRO</div>
+      <header className="hdr">
+        <div className="hdr-logo">
+          MKTSCAN<span className="hdr-logo-slash">/</span>PRO
+        </div>
 
-        <div className="header-divider" />
+        <div className="hdr-sep" />
 
-        <div className="market-pills">
+        <div className="hdr-markets">
           {MARKET_DATA.map(m => (
-            <div key={m.label} className="market-pill">
-              <span className="mp-label">{m.label}</span>
-              <span className="mp-price">{m.price}</span>
-              <span className={`mp-change ${m.pos ? "mp-pos" : "mp-neg"}`}>{m.change}</span>
+            <div key={m.label} className="hdr-pill">
+              <span className="hdr-pill-label">{m.label}</span>
+              <span className="hdr-pill-price">{m.price}</span>
+              <span className={`hdr-pill-chg ${m.pos ? "chg-pos" : "chg-neg"}`}>{m.change}</span>
             </div>
           ))}
         </div>
 
-        <div className="header-right">
+        <div className="hdr-right">
           {watchlistCount > 0 && (
-            <div className="wl-count">
-              <span className="wl-star">★</span>
-              {watchlistCount}
+            <div className="hdr-wl">
+              <span className="hdr-wl-star">★</span>
+              <span>{watchlistCount}</span>
             </div>
           )}
-          <div className="status-row">
-            <div className="status-dot" />
-            <span className="clock">{clock}</span>
+          <div className="hdr-status">
+            <div className="hdr-dot" />
+            <span className="hdr-clock">{clock}</span>
           </div>
         </div>
-      </div>
+      </header>
     </>
   );
 }

@@ -4,8 +4,8 @@ import { PRESETS } from "../data/presets";
 
 const STYLE = `
   .sidebar {
-    width: 264px;
-    min-width: 264px;
+    width: 256px;
+    min-width: 256px;
     border-right: 1px solid var(--border);
     background: var(--surface-1);
     display: flex;
@@ -14,72 +14,80 @@ const STYLE = `
   }
 
   .sb-section {
+    padding: 14px 16px;
     border-bottom: 1px solid var(--border);
-    padding: 16px;
   }
-  .sb-title {
+
+  .sb-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-3);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  /* Toggle buttons */
+  .toggle-group { display: flex; flex-wrap: wrap; gap: 4px; }
+  .toggle-btn {
     font-family: var(--font-ui);
     font-size: 11px;
     font-weight: 500;
-    color: var(--text-3);
-    margin-bottom: 8px;
-    letter-spacing: 0;
-  }
-
-  .toggle-row { display: flex; flex-wrap: wrap; gap: 4px; }
-  .toggle-btn {
-    font-family: var(--font-ui);
-    font-size: 12px;
-    font-weight: 400;
-    padding: 4px 10px;
+    padding: 4px 9px;
     border: 1px solid var(--border);
     background: transparent;
-    color: var(--text-3);
-    cursor: pointer;
-    transition: color 0.1s, background 0.1s, border-color 0.1s;
-    border-radius: 3px;
-    letter-spacing: 0;
-  }
-  .toggle-btn.active {
-    color: var(--accent);
-    background: rgba(232, 160, 32, 0.08);
-    border-color: rgba(232, 160, 32, 0.25);
-  }
-  .toggle-btn:not(.active):hover {
     color: var(--text-2);
+    cursor: pointer;
+    border-radius: var(--radius);
+    transition: color 0.1s, background 0.1s, border-color 0.1s;
+    letter-spacing: 0;
+    line-height: 1.4;
+  }
+  .toggle-btn.on {
+    color: var(--accent);
+    background: var(--accent-dim);
+    border-color: rgba(232,160,32,0.28);
+  }
+  .toggle-btn:not(.on):hover {
+    color: var(--text-1);
     border-color: var(--border-2);
+    background: var(--surface-3);
   }
 
-  .preset-row { display: flex; flex-wrap: wrap; gap: 4px; }
+  /* Preset chips */
+  .preset-group { display: flex; flex-wrap: wrap; gap: 4px; }
   .preset-btn {
     font-family: var(--font-ui);
     font-size: 11px;
-    font-weight: 400;
+    font-weight: 500;
     padding: 4px 10px;
     border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-3);
+    background: var(--surface-2);
+    color: var(--text-2);
     cursor: pointer;
-    border-radius: 3px;
-    transition: color 0.1s, border-color 0.1s;
+    border-radius: var(--radius);
+    transition: color 0.1s, border-color 0.1s, background 0.1s;
     letter-spacing: 0;
+    line-height: 1.4;
   }
   .preset-btn:hover {
     color: var(--text-1);
     border-color: var(--border-2);
+    background: var(--surface-3);
   }
 
-  .filter-group { display: flex; flex-direction: column; gap: 12px; }
-  .filter-item { display: flex; flex-direction: column; gap: 4px; }
+  /* Filter inputs */
+  .filter-stack { display: flex; flex-direction: column; gap: 10px; }
+  .filter-field { display: flex; flex-direction: column; gap: 4px; }
   .filter-label {
-    font-family: var(--font-ui);
     font-size: 11px;
     font-weight: 400;
-    color: var(--text-3);
-    letter-spacing: 0;
+    color: var(--text-2);
   }
-  .filter-row { display: flex; gap: 6px; align-items: center; }
-  .filter-input {
+  .filter-range { display: flex; gap: 6px; align-items: center; }
+  .filter-range-sep { font-size: 11px; color: var(--text-3); flex-shrink: 0; }
+
+  .f-input {
     flex: 1;
     background: var(--surface-3);
     border: 1px solid var(--border);
@@ -88,21 +96,26 @@ const STYLE = `
     font-size: 12px;
     padding: 6px 8px;
     outline: none;
-    transition: border-color 0.1s;
+    border-radius: var(--radius);
+    transition: border-color 0.1s, background 0.1s;
     min-width: 0;
-    border-radius: 2px;
     font-variant-numeric: tabular-nums;
+    width: 100%;
   }
-  .filter-input:focus { border-color: rgba(232,160,32,0.5); }
-  .filter-input::placeholder { color: var(--text-3); }
-  .filter-sep { font-size: 11px; color: var(--text-3); flex-shrink: 0; }
+  .f-input:focus {
+    border-color: rgba(232,160,32,0.45);
+    background: var(--surface-4);
+  }
+  .f-input::placeholder { color: var(--text-3); }
 
-  .scan-section {
-    padding: 16px;
+  /* Bottom actions */
+  .sb-actions {
+    padding: 14px 16px;
     display: flex;
     flex-direction: column;
     gap: 8px;
     margin-top: auto;
+    border-top: 1px solid var(--border);
   }
   .reset-btn {
     background: none;
@@ -112,58 +125,37 @@ const STYLE = `
     font-size: 12px;
     cursor: pointer;
     text-align: center;
-    padding: 4px;
+    padding: 6px;
     transition: color 0.1s;
-    letter-spacing: 0;
+    border-radius: var(--radius);
   }
-  .reset-btn:hover { color: var(--neg); }
+  .reset-btn:hover { color: var(--text-2); }
 `;
 
-function FilterRange({ label, minKey, maxKey, filters, onChange, min, max }) {
+function Range({ label, minKey, maxKey, f, onChange }) {
   return (
-    <div className="filter-item">
+    <div className="filter-field">
       <span className="filter-label">{label}</span>
-      <div className="filter-row">
-        <input
-          className="filter-input"
-          placeholder={min ?? "Min"}
-          value={filters[minKey]}
-          onChange={e => onChange({ ...filters, [minKey]: e.target.value })}
-        />
-        <span className="filter-sep">–</span>
-        <input
-          className="filter-input"
-          placeholder={max ?? "Max"}
-          value={filters[maxKey]}
-          onChange={e => onChange({ ...filters, [maxKey]: e.target.value })}
-        />
+      <div className="filter-range">
+        <input className="f-input" placeholder="Min" value={f[minKey]} onChange={e => onChange({ ...f, [minKey]: e.target.value })} />
+        <span className="filter-range-sep">–</span>
+        <input className="f-input" placeholder="Max" value={f[maxKey]} onChange={e => onChange({ ...f, [maxKey]: e.target.value })} />
       </div>
     </div>
   );
 }
 
-function FilterSingle({ label, field, filters, onChange, placeholder }) {
+function Single({ label, field, f, onChange, ph }) {
   return (
-    <div className="filter-item">
+    <div className="filter-field">
       <span className="filter-label">{label}</span>
-      <input
-        className="filter-input"
-        placeholder={placeholder ?? "Min"}
-        value={filters[field]}
-        onChange={e => onChange({ ...filters, [field]: e.target.value })}
-      />
+      <input className="f-input" placeholder={ph ?? "Min"} value={f[field]} onChange={e => onChange({ ...f, [field]: e.target.value })} />
     </div>
   );
 }
 
-export default function Sidebar({ filters, onFiltersChange, onRunScan, onReset, loading, activeFilterCount }) {
-  const toggle = (key, value) => {
-    const arr = filters[key];
-    onFiltersChange({
-      ...filters,
-      [key]: arr.includes(value) ? arr.filter(x => x !== value) : [...arr, value],
-    });
-  };
+export default function Sidebar({ filters: f, onFiltersChange: set, onRunScan, onReset, loading, activeFilterCount }) {
+  const toggle = (key, val) => set({ ...f, [key]: f[key].includes(val) ? f[key].filter(x => x !== val) : [...f[key], val] });
 
   return (
     <>
@@ -171,70 +163,60 @@ export default function Sidebar({ filters, onFiltersChange, onRunScan, onReset, 
       <div className="sidebar">
 
         <div className="sb-section">
-          <div className="sb-title">Presets</div>
-          <div className="preset-row">
+          <div className="sb-label">Presets</div>
+          <div className="preset-group">
             {Object.keys(PRESETS).map(name => (
-              <button key={name} className="preset-btn" onClick={() => onFiltersChange(PRESETS[name])}>
-                {name}
-              </button>
+              <button key={name} className="preset-btn" onClick={() => set(PRESETS[name])}>{name}</button>
             ))}
           </div>
         </div>
 
         <div className="sb-section">
-          <div className="sb-title">Exchange</div>
-          <div className="toggle-row">
-            {["TSX", "TSX-V", "NYSE", "NASDAQ"].map(ex => (
-              <button
-                key={ex}
-                className={`toggle-btn ${filters.exchanges.includes(ex) ? "active" : ""}`}
-                onClick={() => toggle("exchanges", ex)}
-              >{ex}</button>
+          <div className="sb-label">Exchange</div>
+          <div className="toggle-group">
+            {["TSX","TSX-V","NYSE","NASDAQ"].map(ex => (
+              <button key={ex} className={`toggle-btn ${f.exchanges.includes(ex) ? "on" : ""}`} onClick={() => toggle("exchanges", ex)}>{ex}</button>
             ))}
           </div>
         </div>
 
         <div className="sb-section">
-          <div className="sb-title">Sector</div>
-          <div className="toggle-row">
+          <div className="sb-label">Sector</div>
+          <div className="toggle-group">
             {SECTORS.map(s => (
-              <button
-                key={s}
-                className={`toggle-btn ${filters.sectors.includes(s) ? "active" : ""}`}
-                onClick={() => toggle("sectors", s)}
-              >{s}</button>
+              <button key={s} className={`toggle-btn ${f.sectors.includes(s) ? "on" : ""}`} onClick={() => toggle("sectors", s)}>{s}</button>
             ))}
           </div>
         </div>
 
         <div className="sb-section">
-          <div className="sb-title">Valuation</div>
-          <div className="filter-group">
-            <FilterRange label="Price" minKey="minPrice" maxKey="maxPrice" filters={filters} onChange={onFiltersChange} />
-            <FilterRange label="P/E" minKey="minPE" maxKey="maxPE" filters={filters} onChange={onFiltersChange} />
-            <FilterRange label="P/B" minKey="minPB" maxKey="maxPB" filters={filters} onChange={onFiltersChange} />
+          <div className="sb-label">Valuation</div>
+          <div className="filter-stack">
+            <Range label="Price ($)" minKey="minPrice" maxKey="maxPrice" f={f} onChange={set} />
+            <Range label="P/E" minKey="minPE" maxKey="maxPE" f={f} onChange={set} />
+            <Range label="P/B" minKey="minPB" maxKey="maxPB" f={f} onChange={set} />
           </div>
         </div>
 
         <div className="sb-section">
-          <div className="sb-title">Growth</div>
-          <div className="filter-group">
-            <FilterSingle label="Min EPS Growth %" field="minEPSGrowth" filters={filters} onChange={onFiltersChange} placeholder="e.g. 10" />
-            <FilterSingle label="Min Revenue Growth %" field="minRevGrowth" filters={filters} onChange={onFiltersChange} placeholder="e.g. 5" />
+          <div className="sb-label">Growth</div>
+          <div className="filter-stack">
+            <Single label="Min EPS Growth %" field="minEPSGrowth" f={f} onChange={set} ph="e.g. 10" />
+            <Single label="Min Revenue Growth %" field="minRevGrowth" f={f} onChange={set} ph="e.g. 5" />
           </div>
         </div>
 
         <div className="sb-section">
-          <div className="sb-title">Momentum & Size</div>
-          <div className="filter-group">
-            <FilterSingle label="Min Vol / Avg" field="minVolRatio" filters={filters} onChange={onFiltersChange} placeholder="e.g. 1.5" />
-            <FilterRange label="Market Cap ($B)" minKey="minMktCap" maxKey="maxMktCap" filters={filters} onChange={onFiltersChange} />
+          <div className="sb-label">Momentum & Size</div>
+          <div className="filter-stack">
+            <Single label="Min Vol / Avg" field="minVolRatio" f={f} onChange={set} ph="e.g. 1.5" />
+            <Range label="Market Cap ($B)" minKey="minMktCap" maxKey="maxMktCap" f={f} onChange={set} />
           </div>
         </div>
 
-        <div className="scan-section">
+        <div className="sb-actions">
           <ScanButton loading={loading} activeFilterCount={activeFilterCount} onClick={onRunScan} />
-          <button className="reset-btn" onClick={onReset}>Reset filters</button>
+          <button className="reset-btn" onClick={onReset}>Reset all filters</button>
         </div>
       </div>
     </>

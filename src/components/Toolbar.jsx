@@ -5,137 +5,125 @@ const STYLE = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 16px;
+    padding: 0 16px;
+    height: 44px;
     border-bottom: 1px solid var(--border);
     background: var(--surface-2);
     gap: 12px;
-    flex-wrap: wrap;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
   }
-  .toolbar-left  { display: flex; align-items: center; gap: 12px; }
-  .toolbar-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .tb-left  { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .tb-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
-  .result-count {
-    font-family: var(--font-ui);
+  .tb-count {
     font-size: 12px;
-    color: var(--text-3);
+    color: var(--text-2);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
   }
-  .result-count strong { color: var(--text-1); font-weight: 500; }
+  .tb-count strong { color: var(--text-1); font-weight: 600; }
 
-  .search-box {
+  .tb-search {
     background: var(--surface-3);
     border: 1px solid var(--border);
     color: var(--text-1);
     font-family: var(--font-mono);
     font-size: 12px;
-    padding: 6px 10px;
-    width: 200px;
+    padding: 0 10px;
+    height: 30px;
+    width: 196px;
     outline: none;
-    transition: border-color 0.1s;
-    border-radius: 2px;
+    border-radius: var(--radius);
+    transition: border-color 0.12s, background 0.12s;
   }
-  .search-box:focus { border-color: rgba(232,160,32,0.4); }
-  .search-box::placeholder { color: var(--text-3); }
+  .tb-search:focus {
+    border-color: rgba(232,160,32,0.4);
+    background: var(--surface-4);
+  }
+  .tb-search::placeholder { color: var(--text-3); }
 
-  .sort-select {
+  .tb-sep { width: 1px; height: 16px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+
+  .col-tog {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    border-radius: var(--radius);
+    transition: color 0.1s, border-color 0.1s, background 0.1s;
+    white-space: nowrap;
+  }
+  .col-tog.tog-on  {
+    color: var(--text-2);
+    border-color: var(--border);
+    background: var(--surface-3);
+  }
+  .col-tog.tog-on:hover { color: var(--text-1); border-color: var(--border-2); }
+  .col-tog.tog-off { color: var(--text-3); }
+  .col-tog.tog-off:hover { color: var(--text-2); border-color: var(--border); }
+
+  .tb-sort {
     background: var(--surface-3);
     border: 1px solid var(--border);
     color: var(--text-2);
     font-family: var(--font-ui);
     font-size: 12px;
-    padding: 6px 8px;
+    height: 30px;
+    padding: 0 8px;
     outline: none;
     cursor: pointer;
-    border-radius: 2px;
+    border-radius: var(--radius);
     transition: border-color 0.1s;
   }
-  .sort-select:focus { border-color: var(--border-2); }
+  .tb-sort:focus { border-color: var(--border-2); }
 
-  .col-toggle {
-    font-family: var(--font-ui);
-    font-size: 11px;
-    font-weight: 400;
-    padding: 4px 8px;
-    border: 1px solid var(--border);
-    background: transparent;
-    cursor: pointer;
-    border-radius: 3px;
-    transition: color 0.1s, border-color 0.1s, background 0.1s;
-    letter-spacing: 0;
-  }
-  .col-toggle.col-on  { color: var(--text-2); border-color: var(--border); }
-  .col-toggle.col-on:hover  { color: var(--text-1); border-color: var(--border-2); }
-  .col-toggle.col-off { color: var(--text-3); border-color: transparent; background: transparent; }
-  .col-toggle.col-off:hover { color: var(--text-3); border-color: var(--border); }
-
-  .export-btn {
+  .tb-export {
     font-family: var(--font-ui);
     font-size: 12px;
-    padding: 5px 12px;
+    font-weight: 500;
+    height: 30px;
+    padding: 0 12px;
     border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-3);
+    background: var(--surface-3);
+    color: var(--text-2);
     cursor: pointer;
-    border-radius: 3px;
-    transition: color 0.1s, border-color 0.1s;
-    letter-spacing: 0;
+    border-radius: var(--radius);
+    transition: color 0.1s, border-color 0.1s, background 0.1s;
+    white-space: nowrap;
   }
-  .export-btn:hover { color: var(--text-1); border-color: var(--border-2); }
+  .tb-export:hover { color: var(--text-1); border-color: var(--border-2); background: var(--surface-4); }
 `;
 
-const COL_LABELS = {
-  sparkline:  "Trend",
-  epsGrowth:  "EPS Gr%",
-  revGrowth:  "Rev Gr%",
-  pb:         "P/B",
-  momentum:   "Momentum",
-};
+const COLS = { sparkline: "Trend", epsGrowth: "EPS Gr%", revGrowth: "Rev Gr%", pb: "P/B", momentum: "Mom" };
 
 const Toolbar = forwardRef(function Toolbar({
-  resultCount,
-  searchValue,
-  onSearchChange,
-  sortKey,
-  onSortChange,
-  visibleColumns,
-  onColumnToggle,
+  resultCount, searchValue, onSearchChange,
+  sortKey, onSortChange,
+  visibleColumns, onColumnToggle,
   onExport,
-}, searchRef) {
+}, ref) {
   return (
     <>
       <style>{STYLE}</style>
       <div className="toolbar">
-        <div className="toolbar-left">
-          <span className="result-count">
-            <strong>{resultCount}</strong> result{resultCount !== 1 ? "s" : ""}
-          </span>
-          <input
-            ref={searchRef}
-            className="search-box"
-            placeholder="Search  /"
-            value={searchValue}
-            onChange={e => onSearchChange(e.target.value)}
-          />
+        <div className="tb-left">
+          <span className="tb-count"><strong>{resultCount}</strong> result{resultCount !== 1 ? "s" : ""}</span>
+          <input ref={ref} className="tb-search" placeholder="Search  /" value={searchValue} onChange={e => onSearchChange(e.target.value)} />
         </div>
 
-        <div className="toolbar-right">
-          {Object.entries(COL_LABELS).map(([key, label]) => (
-            <button
-              key={key}
-              className={`col-toggle ${visibleColumns[key] ? "col-on" : "col-off"}`}
-              onClick={() => onColumnToggle(key)}
-            >
-              {label}
-            </button>
+        <div className="tb-right">
+          {Object.entries(COLS).map(([k, lbl]) => (
+            <button key={k} className={`col-tog ${visibleColumns[k] ? "tog-on" : "tog-off"}`} onClick={() => onColumnToggle(k)}>{lbl}</button>
           ))}
-
-          <select
-            className="sort-select"
-            value={sortKey}
-            onChange={e => onSortChange(e.target.value)}
-          >
-            <option value="mktCap">Market Cap</option>
+          <div className="tb-sep" />
+          <select className="tb-sort" value={sortKey} onChange={e => onSortChange(e.target.value)}>
+            <option value="mktCap">Mkt Cap</option>
             <option value="change">% Change</option>
             <option value="pe">P/E</option>
             <option value="pb">P/B</option>
@@ -143,8 +131,7 @@ const Toolbar = forwardRef(function Toolbar({
             <option value="epsGrowth">EPS Growth</option>
             <option value="price">Price</option>
           </select>
-
-          <button className="export-btn" onClick={onExport}>Export CSV</button>
+          <button className="tb-export" onClick={onExport}>Export CSV</button>
         </div>
       </div>
     </>

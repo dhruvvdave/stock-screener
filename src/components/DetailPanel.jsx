@@ -1,4 +1,4 @@
-import AreaChart from "./AreaChart";
+import AreaChart    from "./AreaChart";
 import MomentumDots from "./MomentumDots";
 import { fmt, fmtLarge, fmtVol } from "../data/stocks";
 
@@ -6,40 +6,45 @@ const STYLE = `
   .dp {
     position: fixed;
     right: 0; top: 0; bottom: 0;
-    width: 340px;
+    width: 348px;
     background: var(--surface-1);
     border-left: 1px solid var(--border);
     z-index: 200;
     display: flex;
     flex-direction: column;
     transform: translateX(100%);
-    transition: transform 0.18s ease-out;
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     overflow-y: auto;
+    overflow-x: hidden;
   }
   .dp.open { transform: translateX(0); }
 
+  /* Head */
   .dp-head {
-    padding: 20px 20px 16px;
+    padding: 20px;
     border-bottom: 1px solid var(--border);
-    background: var(--surface-1);
+    flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    flex-shrink: 0;
+    gap: 12px;
   }
-  .dp-price-line {
+  .dp-left { min-width: 0; }
+
+  .dp-price-row {
     display: flex;
     align-items: baseline;
     gap: 10px;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
   }
   .dp-price {
     font-family: var(--font-mono);
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 26px;
+    font-weight: 700;
     color: var(--text-1);
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
+    line-height: 1;
   }
   .dp-chg {
     font-family: var(--font-mono);
@@ -49,110 +54,89 @@ const STYLE = `
   }
   .dp-chg-pos { color: var(--pos); }
   .dp-chg-neg { color: var(--neg); }
+
   .dp-ticker {
     font-family: var(--font-mono);
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--accent);
     letter-spacing: 0.04em;
     margin-bottom: 2px;
   }
   .dp-name {
-    font-family: var(--font-ui);
     font-size: 12px;
     color: var(--text-3);
     margin-bottom: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .dp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .dp-chips { display: flex; gap: 5px; flex-wrap: wrap; }
   .dp-chip {
-    font-family: var(--font-ui);
-    font-size: 11px;
-    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 7px;
     border: 1px solid var(--border);
     color: var(--text-3);
-    border-radius: 3px;
+    border-radius: var(--radius);
+    letter-spacing: 0.02em;
   }
 
-  .dp-head-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; flex-shrink: 0; }
-  .dp-close {
-    background: none;
+  .dp-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+  .dp-close, .dp-star {
+    background: var(--surface-3);
     border: 1px solid var(--border);
-    color: var(--text-3);
+    color: var(--text-2);
     cursor: pointer;
     font-family: var(--font-mono);
-    font-size: 12px;
-    padding: 4px 10px;
-    border-radius: 2px;
-    transition: color 0.1s, border-color 0.1s;
+    font-size: 13px;
+    padding: 5px 11px;
+    border-radius: var(--radius);
+    transition: color 0.1s, border-color 0.1s, background 0.1s;
     line-height: 1.2;
   }
-  .dp-close:hover { color: var(--neg); border-color: var(--neg); }
-  .dp-star {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text-3);
-    cursor: pointer;
-    font-size: 14px;
-    padding: 4px 10px;
-    border-radius: 2px;
-    transition: color 0.1s, border-color 0.1s;
-    line-height: 1.2;
-  }
-  .dp-star:hover   { color: var(--accent); border-color: rgba(232,160,32,0.3); }
-  .dp-star.starred { color: var(--accent); border-color: rgba(232,160,32,0.3); }
+  .dp-close:hover { color: var(--neg); border-color: rgba(255,69,58,0.3); }
+  .dp-star:hover  { color: var(--accent); border-color: rgba(232,160,32,0.3); }
+  .dp-star.on     { color: var(--accent); border-color: rgba(232,160,32,0.3); background: var(--accent-dim); }
 
-  .dp-chart {
+  /* Chart */
+  .dp-chart-wrap {
     padding: 16px 20px 12px;
     border-bottom: 1px solid var(--border);
   }
-  .dp-section-label {
-    font-family: var(--font-ui);
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-3);
-    margin-bottom: 12px;
-    letter-spacing: 0;
-  }
 
-  .dp-section {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-  }
-  .dp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .dp-kv { display: flex; flex-direction: column; gap: 4px; }
-  .dp-k {
-    font-family: var(--font-ui);
-    font-size: 11px;
+  /* Sections */
+  .dp-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .dp-section-hd {
+    font-size: 10px;
+    font-weight: 600;
     color: var(--text-3);
-    letter-spacing: 0;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
   }
-  .dp-v {
-    font-family: var(--font-mono);
-    font-size: 13px;
-    color: var(--text-1);
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
-  }
+  .dp-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .dp-kv    { display: flex; flex-direction: column; gap: 3px; }
+  .dp-k     { font-size: 11px; color: var(--text-3); line-height: 1.3; }
+  .dp-v     { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--text-1); font-variant-numeric: tabular-nums; }
 `;
 
 export default function DetailPanel({ stock, onClose, watchlist, onStarClick, volRatio, momentumScore, sectorMedians }) {
-  const s = stock;
+  const s      = stock;
+  const open   = !!s;
   const starred = s ? watchlist.includes(s.ticker) : false;
 
-  const peColor = (val, med) => {
-    if (val == null || med == null) return "var(--text-1)";
-    return val < med ? "var(--pos)" : "var(--neg)";
-  };
+  const pClr = (v, med) => v == null || med == null ? "var(--text-1)" : v < med ? "var(--pos)" : "var(--neg)";
 
   return (
     <>
       <style>{STYLE}</style>
-      <div className={`dp ${s ? "open" : ""}`}>
+      <div className={`dp ${open ? "open" : ""}`}>
         {s && (
           <>
             <div className="dp-head">
-              <div>
-                <div className="dp-price-line">
+              <div className="dp-left">
+                <div className="dp-price-row">
                   <span className="dp-price">${fmt(s.price, s.price < 10 ? 3 : 2)}</span>
                   <span className={`dp-chg ${s.change >= 0 ? "dp-chg-pos" : "dp-chg-neg"}`}>
                     {s.change >= 0 ? "+" : ""}{fmt(s.change)}%
@@ -165,25 +149,25 @@ export default function DetailPanel({ stock, onClose, watchlist, onStarClick, vo
                   <span className="dp-chip">{s.sector}</span>
                 </div>
               </div>
-              <div className="dp-head-actions">
+              <div className="dp-actions">
                 <button className="dp-close" onClick={onClose}>✕</button>
-                <button className={`dp-star ${starred ? "starred" : ""}`} onClick={() => onStarClick(s.ticker)}>
+                <button className={`dp-star ${starred ? "on" : ""}`} onClick={() => onStarClick(s.ticker)}>
                   {starred ? "★" : "☆"}
                 </button>
               </div>
             </div>
 
-            <div className="dp-chart">
-              <div className="dp-section-label">30-day price (simulated)</div>
+            <div className="dp-chart-wrap">
+              <div className="dp-section-hd" style={{ marginBottom: 10 }}>30-day price · simulated</div>
               <AreaChart positive={s.change >= 0} />
             </div>
 
             <div className="dp-section">
-              <div className="dp-section-label">Valuation</div>
+              <div className="dp-section-hd">Valuation</div>
               <div className="dp-grid">
                 <div className="dp-kv">
                   <span className="dp-k">P/E Ratio</span>
-                  <span className="dp-v" style={{ color: peColor(s.pe, sectorMedians[s.sector]?.pe) }}>
+                  <span className="dp-v" style={{ color: pClr(s.pe, sectorMedians[s.sector]?.pe) }}>
                     {s.pe ? fmt(s.pe, 1) : "—"}
                   </span>
                 </div>
@@ -195,9 +179,7 @@ export default function DetailPanel({ stock, onClose, watchlist, onStarClick, vo
                 </div>
                 <div className="dp-kv">
                   <span className="dp-k">P/B Ratio</span>
-                  <span className="dp-v" style={{ color: peColor(s.pb, sectorMedians[s.sector]?.pb) }}>
-                    {fmt(s.pb, 1)}
-                  </span>
+                  <span className="dp-v" style={{ color: pClr(s.pb, sectorMedians[s.sector]?.pb) }}>{fmt(s.pb, 1)}</span>
                 </div>
                 <div className="dp-kv">
                   <span className="dp-k">Beta</span>
@@ -207,7 +189,7 @@ export default function DetailPanel({ stock, onClose, watchlist, onStarClick, vo
             </div>
 
             <div className="dp-section">
-              <div className="dp-section-label">Growth</div>
+              <div className="dp-section-hd">Growth</div>
               <div className="dp-grid">
                 <div className="dp-kv">
                   <span className="dp-k">EPS Growth</span>
@@ -225,14 +207,14 @@ export default function DetailPanel({ stock, onClose, watchlist, onStarClick, vo
             </div>
 
             <div className="dp-section">
-              <div className="dp-section-label">Volume & momentum</div>
+              <div className="dp-section-hd">Volume & Momentum</div>
               <div className="dp-grid">
                 <div className="dp-kv">
-                  <span className="dp-k">Today</span>
+                  <span className="dp-k">Today's volume</span>
                   <span className="dp-v">{fmtVol(s.vol)}</span>
                 </div>
                 <div className="dp-kv">
-                  <span className="dp-k">Avg daily</span>
+                  <span className="dp-k">Avg daily vol</span>
                   <span className="dp-v">{fmtVol(s.avgVol)}</span>
                 </div>
                 <div className="dp-kv">
@@ -243,21 +225,23 @@ export default function DetailPanel({ stock, onClose, watchlist, onStarClick, vo
                 </div>
                 <div className="dp-kv">
                   <span className="dp-k">Momentum score</span>
-                  <span className="dp-v"><MomentumDots score={momentumScore(s)} /></span>
+                  <span className="dp-v" style={{ display: "flex", alignItems: "center" }}>
+                    <MomentumDots score={momentumScore(s)} size={7} />
+                  </span>
                 </div>
               </div>
             </div>
 
             <div className="dp-section">
-              <div className="dp-section-label">Size</div>
+              <div className="dp-section-hd">Size</div>
               <div className="dp-grid">
                 <div className="dp-kv">
                   <span className="dp-k">Market cap</span>
                   <span className="dp-v">{fmtLarge(s.mktCap)}</span>
                 </div>
                 <div className="dp-kv">
-                  <span className="dp-k">Beta</span>
-                  <span className="dp-v">{fmt(s.beta)}</span>
+                  <span className="dp-k">Exchange</span>
+                  <span className="dp-v" style={{ color: "var(--text-2)" }}>{s.exchange}</span>
                 </div>
               </div>
             </div>
