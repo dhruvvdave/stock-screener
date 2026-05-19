@@ -5,8 +5,8 @@
   --surface-3: #181818;
   --surface-4: #1e1e1e;
 
-  --border:    rgba(255, 255, 255, 0.055);
-  --border-2:  rgba(255, 255, 255, 0.10);
+  --border:    rgba(255, 255, 255, 0.045);
+  --border-2:  rgba(255, 255, 255, 0.07);
   --border-3:  rgba(255, 255, 255, 0.16);
 
   --text-1:    #ececec;
@@ -21,7 +21,7 @@
   --neg-dim:   rgba(255, 69, 58, 0.10);
   --blue:      #0a84ff;
 
-  --font-ui:   system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-ui:   'IBM Plex Sans', system-ui, -apple-system, sans-serif;
   --font-mono: 'IBM Plex Mono', 'Roboto Mono', monospace;
 
   --radius:    3px;

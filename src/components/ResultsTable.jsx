@@ -1,7 +1,7 @@
 import SkeletonRows from "./SkeletonRows";
 import Sparkline    from "./Sparkline";
 import MomentumDots from "./MomentumDots";
-import { fmt, fmtLarge, fmtVol, volRatio, momentumScore } from "../data/stocks";
+import { fmt, fmtLarge, volRatio, momentumScore } from "../data/stocks";
 import { convertPrice } from "../data/api";
 
 const STYLE = `
@@ -17,7 +17,7 @@ const STYLE = `
     font-size: 11px;
     font-weight: 600;
     padding: 0 16px;
-    height: 34px;
+    height: 30px;
     text-align: left;
     border-bottom: 1px solid var(--border);
     cursor: pointer;
@@ -28,19 +28,18 @@ const STYLE = `
     transition: color 0.1s;
   }
   th:hover { color: var(--text-2); }
-  th.th-on { color: var(--text-1); }
+  th.th-on { color: var(--text-2); }
   th.th-r  { text-align: right; }
 
   td {
     padding: 0 16px;
-    height: 46px;
+    height: 40px;
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
     vertical-align: middle;
     font-size: 12px;
   }
 
-  tbody tr:nth-child(even) td { background: rgba(255,255,255,0.012); }
   tbody tr { cursor: pointer; }
   tbody tr:hover td { background: var(--surface-3) !important; }
   tbody tr:hover .td-accent { box-shadow: inset 3px 0 0 var(--accent); }
@@ -62,15 +61,10 @@ const STYLE = `
     line-height: 1.3;
   }
 
-  .chip {
-    display: inline-block;
-    font-family: var(--font-ui);
-    font-size: 10px;
-    font-weight: 500;
-    padding: 2px 7px;
-    border: 1px solid var(--border);
+  .td-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
     color: var(--text-3);
-    border-radius: var(--radius);
     letter-spacing: 0.02em;
   }
 
@@ -79,11 +73,6 @@ const STYLE = `
   .n-base { color: var(--text-1); font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
   .n-dim  { color: var(--text-2); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   .n-r    { text-align: right; }
-
-  .vol-wrap { display: flex; align-items: center; gap: 8px; }
-  .vol-num  { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; min-width: 34px; }
-  .vol-bar  { width: 44px; height: 2px; background: rgba(255,255,255,0.06); border-radius: 1px; }
-  .vol-fill { height: 100%; background: var(--blue); border-radius: 1px; }
 
   .star-btn {
     background: none;
@@ -103,13 +92,12 @@ const STYLE = `
   .empty-title { font-size: 14px; font-weight: 500; color: var(--text-2); margin-bottom: 6px; }
   .empty-sub   { font-size: 12px; color: var(--text-3); }
 
-  /* converted price indicator */
   .price-tilde { color: var(--text-3); font-size: 10px; margin-right: 1px; }
 
   @media (max-width: 768px) {
     .col-hide-mobile { display: none; }
     th, td { padding: 0 12px; }
-    td { height: 52px; }
+    td { height: 46px; }
     .ticker-co { max-width: 120px; }
   }
 `;
@@ -158,7 +146,7 @@ export default function ResultsTable({
                 <SortTh label="Exchange" k="exchange" {...sp} hideMobile />
                 <SortTh label="Sector"   k="sector"   {...sp} hideMobile />
                 {visibleColumns.sparkline  && <th className="col-hide-mobile">Trend</th>}
-                <SortTh label={`Price (${currency})`} k="price"    right {...sp} />
+                <SortTh label={`Price (${currency})`} k="price" right {...sp} />
                 <SortTh label="Chg %"    k="change"   right {...sp} />
                 <SortTh label="P/E"      k="pe"       right {...sp} />
                 {visibleColumns.pb        && <SortTh label="P/B"     k="pb"        right {...sp} hideMobile />}
@@ -197,8 +185,8 @@ export default function ResultsTable({
                           <span className="ticker-co">{s.name}</span>
                         </div>
                       </td>
-                      <td className="col-hide-mobile"><span className="chip">{s.exchange}</span></td>
-                      <td className="col-hide-mobile"><span className="chip">{s.sector}</span></td>
+                      <td className="col-hide-mobile"><span className="td-label">{s.exchange}</span></td>
+                      <td className="col-hide-mobile"><span className="td-label">{s.sector}</span></td>
                       {visibleColumns.sparkline && (
                         <td className="col-hide-mobile" style={{ padding: "0 10px" }}>
                           <Sparkline positive={pos} seed={i} />
@@ -212,14 +200,13 @@ export default function ResultsTable({
                       <td className="n-r" style={{ color: peC ?? "var(--text-2)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
                         {fmt(s.pe, 1)}
                       </td>
-                      {visibleColumns.pb       && <td className="col-hide-mobile n-r" style={{ color: pbC ?? "var(--text-2)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>{fmt(s.pb, 1)}</td>}
+                      {visibleColumns.pb        && <td className="col-hide-mobile n-r" style={{ color: pbC ?? "var(--text-2)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>{fmt(s.pb, 1)}</td>}
                       {visibleColumns.epsGrowth && <td className={`col-hide-mobile ${s.epsGrowth > 0 ? "n-pos" : s.epsGrowth < 0 ? "n-neg" : "n-dim"} n-r`}>{s.epsGrowth != null ? (s.epsGrowth > 0 ? "+" : "") + s.epsGrowth + "%" : "—"}</td>}
                       {visibleColumns.revGrowth && <td className={`col-hide-mobile ${s.revGrowth > 0 ? "n-pos" : "n-neg"} n-r`}>{s.revGrowth > 0 ? "+" : ""}{s.revGrowth}%</td>}
                       <td className="col-hide-mobile">
-                        <div className="vol-wrap">
-                          <span className="vol-num" style={{ color: vr > 1.5 ? "var(--accent)" : "var(--text-2)" }}>{fmt(vr, 1)}×</span>
-                          <div className="vol-bar"><div className="vol-fill" style={{ width: `${Math.min(vr / 3, 1) * 100}%` }} /></div>
-                        </div>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontVariantNumeric: "tabular-nums", color: vr > 1.5 ? "var(--accent)" : "var(--text-2)" }}>
+                          {fmt(vr, 1)}×
+                        </span>
                       </td>
                       <td className="col-hide-mobile n-dim n-r">{fmtLarge(s.mktCap)}</td>
                       {visibleColumns.momentum && <td className="col-hide-mobile"><MomentumDots score={mom} /></td>}

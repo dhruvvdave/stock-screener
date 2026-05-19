@@ -214,8 +214,6 @@ export default function StockScreener() {
               resultCount={sorted.length}
               searchValue={searchRaw}
               onSearchChange={setSearchRaw}
-              sortKey={sortKey}
-              onSortChange={key => { setSortKey(key); setSortDir(-1); }}
               visibleColumns={visibleColumns}
               onColumnToggle={col => setVisibleColumns(p => ({ ...p, [col]: !p[col] }))}
               onExport={handleExport}

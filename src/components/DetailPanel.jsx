@@ -81,36 +81,33 @@ const STYLE = `
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .dp-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+  .dp-chips { display: flex; gap: 8px; flex-wrap: wrap; }
   .dp-chip {
     font-size: 10px;
-    font-weight: 500;
-    padding: 2px 7px;
-    border: 1px solid var(--border);
     color: var(--text-3);
-    border-radius: var(--radius);
+    font-family: var(--font-mono);
     letter-spacing: 0.02em;
   }
 
   .dp-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
   .dp-close, .dp-star {
-    background: var(--surface-3);
-    border: 1px solid var(--border);
-    color: var(--text-2);
+    background: none;
+    border: none;
+    color: var(--text-3);
     cursor: pointer;
     font-family: var(--font-mono);
-    font-size: 13px;
-    padding: 5px 11px;
+    font-size: 14px;
+    padding: 4px;
     border-radius: var(--radius);
-    transition: color 0.1s, border-color 0.1s, background 0.1s;
-    line-height: 1.2;
+    transition: color 0.1s;
+    line-height: 1;
     touch-action: manipulation;
   }
-  .dp-close:hover { color: var(--neg); border-color: rgba(255,69,58,0.3); }
-  .dp-star:hover  { color: var(--accent); border-color: rgba(232,160,32,0.3); }
-  .dp-star.on     { color: var(--accent); border-color: rgba(232,160,32,0.3); background: var(--accent-dim); }
+  .dp-close:hover { color: var(--neg); }
+  .dp-star:hover  { color: var(--accent); }
+  .dp-star.on     { color: var(--accent); }
 
-  .dp-chart-wrap { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); }
+  .dp-chart-wrap { padding: 16px 20px 20px; }
   .dp-chart-label {
     font-size: 10px;
     font-weight: 600;
@@ -129,16 +126,16 @@ const STYLE = `
     letter-spacing: 0.04em;
   }
 
-  .dp-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .dp-section { padding: 20px 20px 4px; }
   .dp-section-hd {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 600;
     color: var(--text-3);
-    letter-spacing: 0.07em;
+    letter-spacing: 0.10em;
     text-transform: uppercase;
     margin-bottom: 12px;
   }
-  .dp-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .dp-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding-bottom: 16px; }
   .dp-kv    { display: flex; flex-direction: column; gap: 3px; }
   .dp-k     { font-size: 11px; color: var(--text-3); line-height: 1.3; }
   .dp-v     { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--text-1); font-variant-numeric: tabular-nums; }
@@ -158,7 +155,6 @@ const STYLE = `
   .dp-cons-buy  { color: var(--pos); }
   .dp-cons-sell { color: var(--neg); }
   .dp-cons-hold { color: var(--text-2); }
-  .dp-cons-n    { color: var(--text-3); }
   .dp-analyst-bars { display: flex; gap: 2px; flex: 1; }
   .dp-analyst-bar  { height: 3px; border-radius: 2px; }
   .dp-analyst-meta { font-size: 11px; color: var(--text-3); }
@@ -258,13 +254,12 @@ export default function DetailPanel({
               <AreaChart positive={s.change >= 0} prices={candleData ?? null} />
             </div>
 
-            {/* Analyst data (when available) */}
             {supplementary?.analyst?.total > 0 && (
               <div className="dp-section">
                 <div className="dp-section-hd">Analyst Consensus</div>
                 <AnalystRow analyst={supplementary.analyst} />
                 {supplementary.sentiment?.bullish != null && (
-                  <div className="dp-analyst-meta" style={{ marginTop: 6 }}>
+                  <div className="dp-analyst-meta" style={{ marginTop: 6, paddingBottom: 4 }}>
                     News: {Math.round(supplementary.sentiment.bullish * 100)}% bullish
                     {supplementary.sentiment.articles > 0 && ` · ${supplementary.sentiment.articles} articles/week`}
                   </div>

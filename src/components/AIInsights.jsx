@@ -4,8 +4,7 @@ import { fmt } from "../data/stocks";
 
 const STYLE = `
   .ai-wrap {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
+    padding: 20px 20px 28px;
   }
   .ai-hd {
     display: flex;
@@ -27,19 +26,17 @@ const STYLE = `
   .ai-gen-btn {
     font-family: var(--font-ui);
     font-size: 11px;
-    font-weight: 500;
     color: var(--accent);
-    background: var(--accent-dim);
-    border: 1px solid rgba(232,160,32,0.2);
-    padding: 3px 10px;
-    border-radius: var(--radius);
+    background: none;
+    border: none;
+    padding: 0;
     cursor: pointer;
-    transition: background 0.1s, border-color 0.1s;
+    transition: opacity 0.1s;
     touch-action: manipulation;
     white-space: nowrap;
   }
-  .ai-gen-btn:hover:not(:disabled) { background: rgba(232,160,32,0.18); border-color: rgba(232,160,32,0.35); }
-  .ai-gen-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .ai-gen-btn:hover:not(:disabled) { opacity: 0.7; }
+  .ai-gen-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
   .ai-prompt { font-size: 12px; color: var(--text-3); line-height: 1.55; }
   .ai-prompt a { color: var(--accent); text-decoration: none; }
