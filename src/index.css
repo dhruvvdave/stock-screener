@@ -25,7 +25,13 @@
   --font-mono: 'IBM Plex Mono', 'Roboto Mono', monospace;
 
   --radius:    3px;
-  --header-h:  48px;
+  --header-h:  44px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --header-h: 48px;
+  }
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -52,3 +58,5 @@ body {
 ::-webkit-scrollbar-track  { background: transparent; }
 ::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.07); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.13); }
+
+button { touch-action: manipulation; }

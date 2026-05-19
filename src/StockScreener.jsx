@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
-import Header      from "./components/Header";
-import Sidebar     from "./components/Sidebar";
-import StatsBar    from "./components/StatsBar";
-import Toolbar     from "./components/Toolbar";
+import Header       from "./components/Header";
+import Sidebar      from "./components/Sidebar";
+import StatsBar     from "./components/StatsBar";
+import Toolbar      from "./components/Toolbar";
 import ResultsTable from "./components/ResultsTable";
 import DetailPanel  from "./components/DetailPanel";
 
@@ -14,13 +14,14 @@ import { STOCKS, computeSectorMedians, volRatio, momentumScore } from "./data/st
 import { DEFAULT_FILTERS, DEFAULT_COLUMNS, computeActiveFilterCount } from "./data/presets";
 
 const STYLE = `
-  .app  { min-height: 100vh; display: flex; flex-direction: column; }
-  .main { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 44px); }
+  .app     { min-height: 100svh; display: flex; flex-direction: column; }
+  .main    { display: flex; flex: 1; overflow: hidden; height: calc(100svh - var(--header-h)); }
   .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 `;
 
 export default function StockScreener() {
-  const [clock, setClock] = useState("");
+  const [clock, setClock]           = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [filters,        setFilters]        = useLocalStorage("mktscan_filters", DEFAULT_FILTERS);
   const [watchlist,      setWatchlist]       = useLocalStorage("mktscan_watchlist", []);
@@ -35,9 +36,9 @@ export default function StockScreener() {
   const [scanned,   setScanned]   = useState(false);
 
   const searchRef = useRef(null);
-  const search = useDebounce(searchRaw, 150);
+  const search    = useDebounce(searchRaw, 150);
 
-  const sectorMedians    = useMemo(() => computeSectorMedians(STOCKS), []);
+  const sectorMedians     = useMemo(() => computeSectorMedians(STOCKS), []);
   const activeFilterCount = useMemo(() => computeActiveFilterCount(filters), [filters]);
 
   const sorted = useMemo(() => {
@@ -56,7 +57,7 @@ export default function StockScreener() {
 
   useEffect(() => {
     const handler = (e) => {
-      if (e.key === "Escape") setSelected(null);
+      if (e.key === "Escape") { setSelected(null); setFiltersOpen(false); }
       if (e.key === "/" && document.activeElement?.tagName !== "INPUT") {
         e.preventDefault();
         searchRef.current?.focus();
@@ -69,22 +70,23 @@ export default function StockScreener() {
   const runScan = useCallback(() => {
     setLoading(true);
     setScanned(true);
+    setFiltersOpen(false);
     setTimeout(() => {
       const f = filters;
       const out = STOCKS.filter(s => {
         if (!f.exchanges.includes(s.exchange)) return false;
         if (!f.sectors.includes(s.sector))    return false;
-        if (f.minPrice    && s.price    < +f.minPrice)                        return false;
-        if (f.maxPrice    && s.price    > +f.maxPrice)                        return false;
-        if (f.minPE       && (s.pe == null || s.pe < +f.minPE))              return false;
-        if (f.maxPE       && (s.pe == null || s.pe > +f.maxPE))              return false;
-        if (f.minPB       && s.pb       < +f.minPB)                          return false;
-        if (f.maxPB       && s.pb       > +f.maxPB)                          return false;
+        if (f.minPrice     && s.price    < +f.minPrice)                               return false;
+        if (f.maxPrice     && s.price    > +f.maxPrice)                               return false;
+        if (f.minPE        && (s.pe == null || s.pe < +f.minPE))                     return false;
+        if (f.maxPE        && (s.pe == null || s.pe > +f.maxPE))                     return false;
+        if (f.minPB        && s.pb       < +f.minPB)                                 return false;
+        if (f.maxPB        && s.pb       > +f.maxPB)                                 return false;
         if (f.minEPSGrowth && (s.epsGrowth == null || s.epsGrowth < +f.minEPSGrowth)) return false;
-        if (f.minRevGrowth && s.revGrowth < +f.minRevGrowth)                 return false;
-        if (f.minVolRatio  && s.vol / s.avgVol < +f.minVolRatio)             return false;
-        if (f.minMktCap    && s.mktCap  < +f.minMktCap)                      return false;
-        if (f.maxMktCap    && s.mktCap  > +f.maxMktCap)                      return false;
+        if (f.minRevGrowth && s.revGrowth < +f.minRevGrowth)                          return false;
+        if (f.minVolRatio  && s.vol / s.avgVol < +f.minVolRatio)                      return false;
+        if (f.minMktCap    && s.mktCap   < +f.minMktCap)                              return false;
+        if (f.maxMktCap    && s.mktCap   > +f.maxMktCap)                              return false;
         return true;
       });
       setResults(out);
@@ -112,7 +114,12 @@ export default function StockScreener() {
     <>
       <style>{STYLE}</style>
       <div className="app">
-        <Header clock={clock} watchlistCount={watchlist.length} />
+        <Header
+          clock={clock}
+          watchlistCount={watchlist.length}
+          onFiltersOpen={() => setFiltersOpen(true)}
+          activeFilterCount={activeFilterCount}
+        />
 
         <div className="main">
           <Sidebar
@@ -122,6 +129,8 @@ export default function StockScreener() {
             onReset={() => setFilters(DEFAULT_FILTERS)}
             loading={loading}
             activeFilterCount={activeFilterCount}
+            open={filtersOpen}
+            onClose={() => setFiltersOpen(false)}
           />
 
           <div className="content">

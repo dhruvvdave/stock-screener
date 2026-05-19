@@ -9,6 +9,7 @@ const STYLE = `
     overflow-x: auto;
     flex-shrink: 0;
     animation: fade-up 0.2s ease both;
+    -webkit-overflow-scrolling: touch;
   }
   @keyframes fade-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
@@ -50,6 +51,12 @@ const STYLE = `
     font-family: var(--font-ui);
     font-size: 11px;
     color: var(--text-3);
+  }
+
+  @media (max-width: 768px) {
+    .stat-cell { padding: 10px 14px; min-width: 110px; }
+    .stat-val  { font-size: 18px; }
+    .stat-sub  { font-size: 10px; }
   }
 `;
 

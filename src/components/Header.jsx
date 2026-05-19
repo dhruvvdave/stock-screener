@@ -17,6 +17,7 @@ const STYLE = `
     top: 0;
     z-index: 100;
     gap: 0;
+    flex-shrink: 0;
   }
 
   .hdr-logo {
@@ -42,7 +43,6 @@ const STYLE = `
   .hdr-markets {
     display: flex;
     align-items: center;
-    gap: 0;
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -117,9 +117,51 @@ const STYLE = `
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
   }
+
+  .hdr-filter-btn {
+    display: none;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    padding: 0 12px;
+    height: 30px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: color 0.1s, border-color 0.1s;
+    touch-action: manipulation;
+    white-space: nowrap;
+  }
+  .hdr-filter-btn:hover { color: var(--text-1); border-color: var(--border-2); }
+  .hdr-filter-badge {
+    background: var(--accent);
+    color: #000;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
+  @media (max-width: 768px) {
+    .hdr { padding: 0 16px; }
+    .hdr-sep  { display: none; }
+    .hdr-markets { display: none; }
+    .hdr-filter-btn { display: flex; }
+    .hdr-right { margin-left: auto; gap: 12px; }
+  }
 `;
 
-export default function Header({ clock, watchlistCount }) {
+export default function Header({ clock, watchlistCount, onFiltersOpen, activeFilterCount }) {
   return (
     <>
       <style>{STYLE}</style>
@@ -139,6 +181,13 @@ export default function Header({ clock, watchlistCount }) {
             </div>
           ))}
         </div>
+
+        <button className="hdr-filter-btn" onClick={onFiltersOpen}>
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="hdr-filter-badge">{activeFilterCount}</span>
+          )}
+        </button>
 
         <div className="hdr-right">
           {watchlistCount > 0 && (

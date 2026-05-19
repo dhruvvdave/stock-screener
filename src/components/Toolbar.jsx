@@ -96,8 +96,17 @@ const STYLE = `
     border-radius: var(--radius);
     transition: color 0.1s, border-color 0.1s, background 0.1s;
     white-space: nowrap;
+    touch-action: manipulation;
   }
   .tb-export:hover { color: var(--text-1); border-color: var(--border-2); background: var(--surface-4); }
+
+  @media (max-width: 768px) {
+    .toolbar { padding: 0 12px; gap: 8px; }
+    .tb-left { flex: 1; min-width: 0; }
+    .tb-search { width: auto; flex: 1; max-width: none; min-width: 0; }
+    .col-tog, .tb-sep, .tb-sort { display: none; }
+    .tb-right { gap: 8px; }
+  }
 `;
 
 const COLS = { sparkline: "Trend", epsGrowth: "EPS Gr%", revGrowth: "Rev Gr%", pb: "P/B", momentum: "Mom" };

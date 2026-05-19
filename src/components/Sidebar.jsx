@@ -3,14 +3,19 @@ import { SECTORS } from "../data/stocks";
 import { PRESETS } from "../data/presets";
 
 const STYLE = `
+  .sb-backdrop {
+    display: none;
+  }
+
   .sidebar {
-    width: 256px;
-    min-width: 256px;
+    width: 240px;
+    min-width: 240px;
     border-right: 1px solid var(--border);
     background: var(--surface-1);
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    flex-shrink: 0;
   }
 
   .sb-section {
@@ -22,12 +27,11 @@ const STYLE = `
     font-size: 10px;
     font-weight: 600;
     color: var(--text-3);
-    letter-spacing: 0.07em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     margin-bottom: 8px;
   }
 
-  /* Toggle buttons */
   .toggle-group { display: flex; flex-wrap: wrap; gap: 4px; }
   .toggle-btn {
     font-family: var(--font-ui);
@@ -40,8 +44,8 @@ const STYLE = `
     cursor: pointer;
     border-radius: var(--radius);
     transition: color 0.1s, background 0.1s, border-color 0.1s;
-    letter-spacing: 0;
     line-height: 1.4;
+    touch-action: manipulation;
   }
   .toggle-btn.on {
     color: var(--accent);
@@ -54,7 +58,6 @@ const STYLE = `
     background: var(--surface-3);
   }
 
-  /* Preset chips */
   .preset-group { display: flex; flex-wrap: wrap; gap: 4px; }
   .preset-btn {
     font-family: var(--font-ui);
@@ -67,8 +70,8 @@ const STYLE = `
     cursor: pointer;
     border-radius: var(--radius);
     transition: color 0.1s, border-color 0.1s, background 0.1s;
-    letter-spacing: 0;
     line-height: 1.4;
+    touch-action: manipulation;
   }
   .preset-btn:hover {
     color: var(--text-1);
@@ -76,14 +79,9 @@ const STYLE = `
     background: var(--surface-3);
   }
 
-  /* Filter inputs */
   .filter-stack { display: flex; flex-direction: column; gap: 10px; }
   .filter-field { display: flex; flex-direction: column; gap: 4px; }
-  .filter-label {
-    font-size: 11px;
-    font-weight: 400;
-    color: var(--text-2);
-  }
+  .filter-label { font-size: 11px; font-weight: 400; color: var(--text-2); }
   .filter-range { display: flex; gap: 6px; align-items: center; }
   .filter-range-sep { font-size: 11px; color: var(--text-3); flex-shrink: 0; }
 
@@ -108,7 +106,6 @@ const STYLE = `
   }
   .f-input::placeholder { color: var(--text-3); }
 
-  /* Bottom actions */
   .sb-actions {
     padding: 14px 16px;
     display: flex;
@@ -128,8 +125,63 @@ const STYLE = `
     padding: 6px;
     transition: color 0.1s;
     border-radius: var(--radius);
+    touch-action: manipulation;
   }
   .reset-btn:hover { color: var(--text-2); }
+
+  /* Mobile drawer */
+  .sb-drawer-handle { display: none; }
+
+  @media (max-width: 768px) {
+    .sb-backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0);
+      z-index: 299;
+      pointer-events: none;
+      transition: background 0.25s ease;
+    }
+    .sb-backdrop.open {
+      background: rgba(0, 0, 0, 0.6);
+      pointer-events: auto;
+    }
+
+    .sidebar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100% !important;
+      min-width: unset !important;
+      max-height: 88svh;
+      border-right: none;
+      border-top: 1px solid var(--border);
+      border-radius: 14px 14px 0 0;
+      z-index: 300;
+      transform: translateY(100%);
+      transition: transform 0.26s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .sidebar.open { transform: translateY(0); }
+
+    .sb-drawer-handle {
+      display: flex;
+      justify-content: center;
+      padding: 12px 0 4px;
+      flex-shrink: 0;
+    }
+    .sb-drawer-handle::before {
+      content: '';
+      width: 36px;
+      height: 4px;
+      background: var(--border-2);
+      border-radius: 2px;
+    }
+
+    .sb-actions { padding-bottom: 28px; }
+  }
 `;
 
 function Range({ label, minKey, maxKey, f, onChange }) {
@@ -154,13 +206,15 @@ function Single({ label, field, f, onChange, ph }) {
   );
 }
 
-export default function Sidebar({ filters: f, onFiltersChange: set, onRunScan, onReset, loading, activeFilterCount }) {
+export default function Sidebar({ filters: f, onFiltersChange: set, onRunScan, onReset, loading, activeFilterCount, open, onClose }) {
   const toggle = (key, val) => set({ ...f, [key]: f[key].includes(val) ? f[key].filter(x => x !== val) : [...f[key], val] });
 
   return (
     <>
       <style>{STYLE}</style>
-      <div className="sidebar">
+      <div className={`sb-backdrop ${open ? "open" : ""}`} onClick={onClose} />
+      <div className={`sidebar ${open ? "open" : ""}`}>
+        <div className="sb-drawer-handle" />
 
         <div className="sb-section">
           <div className="sb-label">Presets</div>

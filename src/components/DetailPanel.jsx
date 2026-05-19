@@ -16,10 +16,10 @@ const STYLE = `
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     overflow-y: auto;
     overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
   }
   .dp.open { transform: translateX(0); }
 
-  /* Head */
   .dp-head {
     padding: 20px;
     border-bottom: 1px solid var(--border);
@@ -94,18 +94,17 @@ const STYLE = `
     border-radius: var(--radius);
     transition: color 0.1s, border-color 0.1s, background 0.1s;
     line-height: 1.2;
+    touch-action: manipulation;
   }
   .dp-close:hover { color: var(--neg); border-color: rgba(255,69,58,0.3); }
   .dp-star:hover  { color: var(--accent); border-color: rgba(232,160,32,0.3); }
   .dp-star.on     { color: var(--accent); border-color: rgba(232,160,32,0.3); background: var(--accent-dim); }
 
-  /* Chart */
   .dp-chart-wrap {
     padding: 16px 20px 12px;
     border-bottom: 1px solid var(--border);
   }
 
-  /* Sections */
   .dp-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
   .dp-section-hd {
     font-size: 10px;
@@ -119,6 +118,15 @@ const STYLE = `
   .dp-kv    { display: flex; flex-direction: column; gap: 3px; }
   .dp-k     { font-size: 11px; color: var(--text-3); line-height: 1.3; }
   .dp-v     { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--text-1); font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 768px) {
+    .dp {
+      width: 100%;
+      left: 0;
+      border-left: none;
+      top: var(--header-h);
+    }
+  }
 `;
 
 export default function DetailPanel({ stock, onClose, watchlist, onStarClick, volRatio, momentumScore, sectorMedians }) {
