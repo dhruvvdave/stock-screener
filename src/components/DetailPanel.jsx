@@ -1,6 +1,8 @@
 import AreaChart    from "./AreaChart";
 import MomentumDots from "./MomentumDots";
+import AIInsights   from "./AIInsights";
 import { fmt, fmtLarge, fmtVol } from "../data/stocks";
+import { convertPrice } from "../data/api";
 
 const STYLE = `
   .dp {
@@ -45,6 +47,14 @@ const STYLE = `
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
     line-height: 1;
+  }
+  .dp-price-conv {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+    align-self: flex-end;
+    margin-bottom: 2px;
   }
   .dp-chg {
     font-family: var(--font-mono);
@@ -100,9 +110,23 @@ const STYLE = `
   .dp-star:hover  { color: var(--accent); border-color: rgba(232,160,32,0.3); }
   .dp-star.on     { color: var(--accent); border-color: rgba(232,160,32,0.3); background: var(--accent-dim); }
 
-  .dp-chart-wrap {
-    padding: 16px 20px 12px;
-    border-bottom: 1px solid var(--border);
+  .dp-chart-wrap { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); }
+  .dp-chart-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-3);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dp-chart-live {
+    font-size: 9px;
+    color: var(--pos);
+    font-weight: 500;
+    letter-spacing: 0.04em;
   }
 
   .dp-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
@@ -119,22 +143,74 @@ const STYLE = `
   .dp-k     { font-size: 11px; color: var(--text-3); line-height: 1.3; }
   .dp-v     { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--text-1); font-variant-numeric: tabular-nums; }
 
+  /* Analyst section */
+  .dp-analyst-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .dp-cons {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .dp-cons-buy  { color: var(--pos); }
+  .dp-cons-sell { color: var(--neg); }
+  .dp-cons-hold { color: var(--text-2); }
+  .dp-cons-n    { color: var(--text-3); }
+  .dp-analyst-bars { display: flex; gap: 2px; flex: 1; }
+  .dp-analyst-bar  { height: 3px; border-radius: 2px; }
+  .dp-analyst-meta { font-size: 11px; color: var(--text-3); }
+
   @media (max-width: 768px) {
-    .dp {
-      width: 100%;
-      left: 0;
-      border-left: none;
-      top: var(--header-h);
-    }
+    .dp { width: 100%; left: 0; border-left: none; top: var(--header-h); }
   }
 `;
 
-export default function DetailPanel({ stock, onClose, watchlist, onStarClick, volRatio, momentumScore, sectorMedians }) {
-  const s      = stock;
-  const open   = !!s;
-  const starred = s ? watchlist.includes(s.ticker) : false;
+function pClr(v, med) {
+  return v == null || med == null ? "var(--text-1)" : v < med ? "var(--pos)" : "var(--neg)";
+}
 
-  const pClr = (v, med) => v == null || med == null ? "var(--text-1)" : v < med ? "var(--pos)" : "var(--neg)";
+function AnalystRow({ analyst }) {
+  if (!analyst || !analyst.total) return null;
+  const { buy, hold, sell, total, meanTarget, highTarget, lowTarget } = analyst;
+
+  const consensus = buy > hold && buy > sell ? "BUY"
+    : sell > buy && sell > hold ? "SELL"
+    : "HOLD";
+  const consCls = consensus === "BUY" ? "dp-cons-buy" : consensus === "SELL" ? "dp-cons-sell" : "dp-cons-hold";
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div className="dp-analyst-row">
+        <span className={`dp-cons ${consCls}`}>{consensus}</span>
+        <div className="dp-analyst-bars">
+          {buy  > 0 && <div className="dp-analyst-bar" style={{ flex: buy,  background: "var(--pos)" }} />}
+          {hold > 0 && <div className="dp-analyst-bar" style={{ flex: hold, background: "var(--text-3)" }} />}
+          {sell > 0 && <div className="dp-analyst-bar" style={{ flex: sell, background: "var(--neg)" }} />}
+        </div>
+        <span className="dp-analyst-meta">{total} analysts</span>
+      </div>
+      {meanTarget != null && (
+        <div className="dp-analyst-meta">
+          Target ${fmt(meanTarget, 2)}
+          {highTarget && lowTarget && ` · range $${fmt(lowTarget, 2)}–$${fmt(highTarget, 2)}`}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function DetailPanel({
+  stock, onClose, watchlist, onStarClick,
+  volRatio, momentumScore, sectorMedians,
+  currency, usdToCadRate,
+  candleData, supplementary, claudeKey,
+}) {
+  const s       = stock;
+  const open    = !!s;
+  const starred = s ? watchlist.includes(s.ticker) : false;
 
   return (
     <>
@@ -144,12 +220,21 @@ export default function DetailPanel({ stock, onClose, watchlist, onStarClick, vo
           <>
             <div className="dp-head">
               <div className="dp-left">
-                <div className="dp-price-row">
-                  <span className="dp-price">${fmt(s.price, s.price < 10 ? 3 : 2)}</span>
-                  <span className={`dp-chg ${s.change >= 0 ? "dp-chg-pos" : "dp-chg-neg"}`}>
-                    {s.change >= 0 ? "+" : ""}{fmt(s.change)}%
-                  </span>
-                </div>
+                {(() => {
+                  const { price: dispPrice, converted } = convertPrice(s.price, s.exchange, currency, usdToCadRate);
+                  const dec = dispPrice < 10 ? 3 : 2;
+                  return (
+                    <div className="dp-price-row">
+                      <span className="dp-price">{converted && "~"}${fmt(dispPrice, dec)}</span>
+                      <span className={`dp-chg ${s.change >= 0 ? "dp-chg-pos" : "dp-chg-neg"}`}>
+                        {s.change >= 0 ? "+" : ""}{fmt(s.change)}%
+                      </span>
+                      {converted && (
+                        <span className="dp-price-conv">{currency}</span>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="dp-ticker">{s.ticker}</div>
                 <div className="dp-name">{s.name}</div>
                 <div className="dp-chips">
@@ -166,9 +251,26 @@ export default function DetailPanel({ stock, onClose, watchlist, onStarClick, vo
             </div>
 
             <div className="dp-chart-wrap">
-              <div className="dp-section-hd" style={{ marginBottom: 10 }}>30-day price · simulated</div>
-              <AreaChart positive={s.change >= 0} />
+              <div className="dp-chart-label">
+                30-day price
+                {candleData ? <span className="dp-chart-live">live</span> : <span style={{ color: "var(--text-3)", fontSize: 9 }}>simulated</span>}
+              </div>
+              <AreaChart positive={s.change >= 0} prices={candleData ?? null} />
             </div>
+
+            {/* Analyst data (when available) */}
+            {supplementary?.analyst?.total > 0 && (
+              <div className="dp-section">
+                <div className="dp-section-hd">Analyst Consensus</div>
+                <AnalystRow analyst={supplementary.analyst} />
+                {supplementary.sentiment?.bullish != null && (
+                  <div className="dp-analyst-meta" style={{ marginTop: 6 }}>
+                    News: {Math.round(supplementary.sentiment.bullish * 100)}% bullish
+                    {supplementary.sentiment.articles > 0 && ` · ${supplementary.sentiment.articles} articles/week`}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="dp-section">
               <div className="dp-section-hd">Valuation</div>
@@ -253,6 +355,13 @@ export default function DetailPanel({ stock, onClose, watchlist, onStarClick, vo
                 </div>
               </div>
             </div>
+
+            <AIInsights
+              stock={s}
+              analystData={supplementary?.analyst ?? null}
+              sentiment={supplementary?.sentiment ?? null}
+              claudeKey={claudeKey}
+            />
           </>
         )}
       </div>

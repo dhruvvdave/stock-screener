@@ -2,6 +2,7 @@ import SkeletonRows from "./SkeletonRows";
 import Sparkline    from "./Sparkline";
 import MomentumDots from "./MomentumDots";
 import { fmt, fmtLarge, fmtVol, volRatio, momentumScore } from "../data/stocks";
+import { convertPrice } from "../data/api";
 
 const STYLE = `
   .tbl-wrap { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; }
@@ -102,6 +103,9 @@ const STYLE = `
   .empty-title { font-size: 14px; font-weight: 500; color: var(--text-2); margin-bottom: 6px; }
   .empty-sub   { font-size: 12px; color: var(--text-3); }
 
+  /* converted price indicator */
+  .price-tilde { color: var(--text-3); font-size: 10px; margin-right: 1px; }
+
   @media (max-width: 768px) {
     .col-hide-mobile { display: none; }
     th, td { padding: 0 12px; }
@@ -110,11 +114,11 @@ const STYLE = `
   }
 `;
 
-function SortTh({ label, k, right, sortKey, sortDir, onSort, mobile }) {
+function SortTh({ label, k, right, sortKey, sortDir, onSort, hideMobile }) {
   const on = sortKey === k;
   return (
     <th
-      className={`${on ? "th-on" : ""} ${right ? "th-r" : ""} ${mobile === false ? "col-hide-mobile" : ""}`}
+      className={`${on ? "th-on" : ""} ${right ? "th-r" : ""} ${hideMobile ? "col-hide-mobile" : ""}`}
       onClick={() => onSort(k)}
     >
       {label}{on ? (sortDir === -1 ? " ↓" : " ↑") : ""}
@@ -127,10 +131,14 @@ function clr(val, med) {
   return val < med ? "var(--pos)" : "var(--neg)";
 }
 
-export default function ResultsTable({ rows, loading, sortKey, sortDir, onSort, onRowClick, onStarClick, watchlist, visibleColumns, sectorMedians }) {
+export default function ResultsTable({
+  rows, loading, sortKey, sortDir, onSort,
+  onRowClick, onStarClick, watchlist, visibleColumns, sectorMedians,
+  currency, usdToCadRate,
+}) {
+  const sp = { sortKey, sortDir, onSort };
   const optCount = [visibleColumns.sparkline, visibleColumns.pb, visibleColumns.epsGrowth, visibleColumns.revGrowth, visibleColumns.momentum].filter(Boolean).length;
   const totalCols = 9 + optCount;
-  const sp = { sortKey, sortDir, onSort };
 
   return (
     <>
@@ -147,17 +155,17 @@ export default function ResultsTable({ rows, loading, sortKey, sortDir, onSort, 
               <tr>
                 <th style={{ width: 36, padding: "0 12px" }} />
                 <SortTh label="Ticker"   k="ticker"   {...sp} />
-                <SortTh label="Exchange" k="exchange" {...sp} mobile={false} />
-                <SortTh label="Sector"   k="sector"   {...sp} mobile={false} />
+                <SortTh label="Exchange" k="exchange" {...sp} hideMobile />
+                <SortTh label="Sector"   k="sector"   {...sp} hideMobile />
                 {visibleColumns.sparkline  && <th className="col-hide-mobile">Trend</th>}
-                <SortTh label="Price"    k="price"     right {...sp} />
-                <SortTh label="Chg %"    k="change"    right {...sp} />
-                <SortTh label="P/E"      k="pe"        right {...sp} />
-                {visibleColumns.pb        && <SortTh label="P/B"     k="pb"        right {...sp} mobile={false} />}
-                {visibleColumns.epsGrowth && <SortTh label="EPS Gr%" k="epsGrowth" right {...sp} mobile={false} />}
-                {visibleColumns.revGrowth && <SortTh label="Rev Gr%" k="revGrowth" right {...sp} mobile={false} />}
-                <SortTh label="Vol/Avg"  k="vol"      {...sp} mobile={false} />
-                <SortTh label="Mkt Cap"  k="mktCap"   right {...sp} mobile={false} />
+                <SortTh label={`Price (${currency})`} k="price"    right {...sp} />
+                <SortTh label="Chg %"    k="change"   right {...sp} />
+                <SortTh label="P/E"      k="pe"       right {...sp} />
+                {visibleColumns.pb        && <SortTh label="P/B"     k="pb"        right {...sp} hideMobile />}
+                {visibleColumns.epsGrowth && <SortTh label="EPS Gr%" k="epsGrowth" right {...sp} hideMobile />}
+                {visibleColumns.revGrowth && <SortTh label="Rev Gr%" k="revGrowth" right {...sp} hideMobile />}
+                <SortTh label="Vol/Avg"  k="vol"      {...sp} hideMobile />
+                <SortTh label="Mkt Cap"  k="mktCap"   right {...sp} hideMobile />
                 {visibleColumns.momentum  && <th className="col-hide-mobile">Mom</th>}
               </tr>
             </thead>
@@ -166,12 +174,14 @@ export default function ResultsTable({ rows, loading, sortKey, sortDir, onSort, 
                 <SkeletonRows count={8} columnCount={totalCols} />
               ) : (
                 rows.map((s, i) => {
-                  const pos  = s.change >= 0;
-                  const vr   = volRatio(s);
-                  const mom  = momentumScore(s);
-                  const star = watchlist.includes(s.ticker);
-                  const peC  = clr(s.pe, sectorMedians[s.sector]?.pe);
-                  const pbC  = clr(s.pb, sectorMedians[s.sector]?.pb);
+                  const pos   = s.change >= 0;
+                  const vr    = volRatio(s);
+                  const mom   = momentumScore(s);
+                  const star  = watchlist.includes(s.ticker);
+                  const peC   = clr(s.pe, sectorMedians[s.sector]?.pe);
+                  const pbC   = clr(s.pb, sectorMedians[s.sector]?.pb);
+                  const { price: dispPrice, converted } = convertPrice(s.price, s.exchange, currency, usdToCadRate);
+                  const priceDecimals = dispPrice < 10 ? 3 : 2;
 
                   return (
                     <tr key={s.ticker} onClick={() => onRowClick(s)}>
@@ -194,9 +204,14 @@ export default function ResultsTable({ rows, loading, sortKey, sortDir, onSort, 
                           <Sparkline positive={pos} seed={i} />
                         </td>
                       )}
-                      <td className="n-base n-r">${fmt(s.price, s.price < 10 ? 3 : 2)}</td>
+                      <td className="n-base n-r">
+                        {converted && <span className="price-tilde">~</span>}
+                        ${fmt(dispPrice, priceDecimals)}
+                      </td>
                       <td className={`${pos ? "n-pos" : "n-neg"} n-r`}>{pos ? "+" : ""}{fmt(s.change)}%</td>
-                      <td className="n-r" style={{ color: peC ?? "var(--text-2)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>{fmt(s.pe, 1)}</td>
+                      <td className="n-r" style={{ color: peC ?? "var(--text-2)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+                        {fmt(s.pe, 1)}
+                      </td>
                       {visibleColumns.pb       && <td className="col-hide-mobile n-r" style={{ color: pbC ?? "var(--text-2)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>{fmt(s.pb, 1)}</td>}
                       {visibleColumns.epsGrowth && <td className={`col-hide-mobile ${s.epsGrowth > 0 ? "n-pos" : s.epsGrowth < 0 ? "n-neg" : "n-dim"} n-r`}>{s.epsGrowth != null ? (s.epsGrowth > 0 ? "+" : "") + s.epsGrowth + "%" : "—"}</td>}
                       {visibleColumns.revGrowth && <td className={`col-hide-mobile ${s.revGrowth > 0 ? "n-pos" : "n-neg"} n-r`}>{s.revGrowth > 0 ? "+" : ""}{s.revGrowth}%</td>}

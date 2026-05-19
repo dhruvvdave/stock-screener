@@ -16,7 +16,6 @@ const STYLE = `
     position: sticky;
     top: 0;
     z-index: 100;
-    gap: 0;
     flex-shrink: 0;
   }
 
@@ -71,38 +70,48 @@ const STYLE = `
     color: var(--text-1);
     font-variant-numeric: tabular-nums;
   }
-  .hdr-pill-chg {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-  }
+  .hdr-pill-chg { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
   .chg-pos { color: var(--pos); }
   .chg-neg { color: var(--neg); }
 
   .hdr-right {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
     flex-shrink: 0;
-    margin-left: 18px;
+    margin-left: 16px;
   }
 
+  /* Currency toggle */
+  .hdr-currency {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .hdr-ccy-sep { color: var(--text-3); }
+  .hdr-ccy-on  { color: var(--text-1); font-weight: 600; }
+  .hdr-ccy-off { color: var(--text-3); transition: color 0.1s; }
+  .hdr-ccy-off:hover { color: var(--text-2); }
+
+  /* Watchlist */
   .hdr-wl {
     display: flex;
     align-items: center;
     gap: 5px;
-    font-family: var(--font-ui);
     font-size: 12px;
     color: var(--text-2);
     cursor: default;
+    flex-shrink: 0;
   }
   .hdr-wl-star { color: var(--accent); font-size: 10px; }
 
-  .hdr-status {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
+  /* Loading dot */
+  .hdr-status { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
   .hdr-dot {
     width: 5px;
     height: 5px;
@@ -110,6 +119,8 @@ const STYLE = `
     background: var(--pos);
     flex-shrink: 0;
   }
+  .hdr-dot.loading { animation: dot-pulse 1s ease-in-out infinite; }
+  @keyframes dot-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
   .hdr-clock {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -118,6 +129,22 @@ const STYLE = `
     letter-spacing: 0.02em;
   }
 
+  /* Settings gear */
+  .hdr-gear {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+    line-height: 1;
+    transition: color 0.1s;
+    flex-shrink: 0;
+    touch-action: manipulation;
+  }
+  .hdr-gear:hover { color: var(--text-2); }
+
+  /* Mobile filter button — hidden on desktop */
   .hdr-filter-btn {
     display: none;
     align-items: center;
@@ -149,19 +176,21 @@ const STYLE = `
     display: flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
   }
 
   @media (max-width: 768px) {
-    .hdr { padding: 0 16px; }
-    .hdr-sep  { display: none; }
-    .hdr-markets { display: none; }
+    .hdr { padding: 0 16px; gap: 0; }
+    .hdr-sep, .hdr-markets { display: none; }
     .hdr-filter-btn { display: flex; }
     .hdr-right { margin-left: auto; gap: 12px; }
+    .hdr-currency { display: none; }
   }
 `;
 
-export default function Header({ clock, watchlistCount, onFiltersOpen, activeFilterCount }) {
+export default function Header({
+  clock, watchlistCount, currency, onCurrencyToggle,
+  onSettingsOpen, quotesLoading, onFiltersOpen, activeFilterCount,
+}) {
   return (
     <>
       <style>{STYLE}</style>
@@ -182,6 +211,7 @@ export default function Header({ clock, watchlistCount, onFiltersOpen, activeFil
           ))}
         </div>
 
+        {/* Mobile filter button */}
         <button className="hdr-filter-btn" onClick={onFiltersOpen}>
           Filters
           {activeFilterCount > 0 && (
@@ -190,14 +220,30 @@ export default function Header({ clock, watchlistCount, onFiltersOpen, activeFil
         </button>
 
         <div className="hdr-right">
+          {/* Currency toggle */}
+          <div className="hdr-currency">
+            <span
+              className={currency === "USD" ? "hdr-ccy-on" : "hdr-ccy-off"}
+              onClick={() => currency !== "USD" && onCurrencyToggle("USD")}
+            >USD</span>
+            <span className="hdr-ccy-sep">·</span>
+            <span
+              className={currency === "CAD" ? "hdr-ccy-on" : "hdr-ccy-off"}
+              onClick={() => currency !== "CAD" && onCurrencyToggle("CAD")}
+            >CAD</span>
+          </div>
+
           {watchlistCount > 0 && (
             <div className="hdr-wl">
               <span className="hdr-wl-star">★</span>
               <span>{watchlistCount}</span>
             </div>
           )}
+
+          <button className="hdr-gear" onClick={onSettingsOpen} title="API Settings">⚙</button>
+
           <div className="hdr-status">
-            <div className="hdr-dot" />
+            <div className={`hdr-dot ${quotesLoading ? "loading" : ""}`} />
             <span className="hdr-clock">{clock}</span>
           </div>
         </div>
