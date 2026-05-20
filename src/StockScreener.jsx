@@ -1,64 +1,144 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+
+const PHRASES = [
+  "Real-time quotes on any ticker",
+  "Search any stock in seconds",
+  "Live market data, no noise",
+];
 
 const STYLE = `
   .app {
     min-height: 100svh;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     padding: 24px;
+    position: relative;
+    gap: 48px;
   }
+
+  .app::before {
+    content: '';
+    position: absolute;
+    top: 15%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 700px;
+    height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, rgba(255,255,255,0.055) 0%, transparent 68%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .hero {
+    text-align: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-title {
+    font-size: clamp(2.4rem, 7vw, 4.5rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    color: var(--text-1);
+    margin-bottom: 16px;
+    font-family: var(--font-ui);
+  }
+
+  .hero-sub {
+    font-size: clamp(1rem, 3vw, 1.35rem);
+    color: var(--text-2);
+    min-height: 1.8em;
+    font-family: var(--font-ui);
+  }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .hero-cursor { animation: blink 1s step-end infinite; }
 
   .search-card {
     width: 100%;
     max-width: 520px;
+    position: relative;
+    z-index: 1;
   }
 
-  .search-form {
+  .search-pill {
     display: flex;
-    gap: 10px;
+    align-items: center;
+    border: 1px solid var(--border-2);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 6px 6px 6px 20px;
+    gap: 8px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: border-color 0.2s;
+  }
+
+  .search-pill:focus-within {
+    border-color: rgba(255, 255, 255, 0.18);
   }
 
   .search-input {
     flex: 1;
-    height: 44px;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    background: rgba(255, 255, 255, 0.03);
+    background: transparent;
+    border: none;
     color: var(--text-1);
-    padding: 0 14px;
     font-size: 15px;
     outline: none;
     font-family: var(--font-ui);
+    height: 38px;
   }
 
-  .search-input:focus {
-    border-color: rgba(255, 255, 255, 0.28);
+  .search-input::placeholder {
+    color: var(--text-3);
   }
 
   .search-btn {
-    height: 44px;
-    border: 1px solid var(--border);
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-1);
-    border-radius: 10px;
-    padding: 0 16px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: none;
+    background: var(--text-1);
+    color: var(--bg);
     cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
   }
 
   .search-btn:disabled {
-    opacity: 0.55;
+    opacity: 0.4;
     cursor: not-allowed;
   }
+
+  .search-btn-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .search-btn-spin {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(5,5,5,0.3);
+    border-top-color: var(--bg);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   .error {
     margin-top: 12px;
     color: var(--neg);
     font-size: 13px;
     line-height: 1.4;
+    padding-left: 4px;
   }
 
   .quote {
@@ -147,6 +227,42 @@ export default function StockScreener() {
   const [error, setError] = useState("");
   const [quote, setQuote] = useState(null);
 
+  const [displayText, setDisplayText] = useState("");
+  const typeState = useRef({ phraseIndex: 0, charIndex: 0, isDeleting: false });
+
+  useEffect(() => {
+    let timer;
+    const tick = () => {
+      const { phraseIndex, charIndex, isDeleting } = typeState.current;
+      const phrase = PHRASES[phraseIndex];
+
+      if (!isDeleting) {
+        const next = charIndex + 1;
+        setDisplayText(phrase.slice(0, next));
+        if (next === phrase.length) {
+          typeState.current = { phraseIndex, charIndex: next, isDeleting: true };
+          timer = setTimeout(tick, 1800);
+        } else {
+          typeState.current = { phraseIndex, charIndex: next, isDeleting: false };
+          timer = setTimeout(tick, 65);
+        }
+      } else {
+        const next = charIndex - 1;
+        setDisplayText(phrase.slice(0, next));
+        if (next === 0) {
+          const nextPhrase = (phraseIndex + 1) % PHRASES.length;
+          typeState.current = { phraseIndex: nextPhrase, charIndex: 0, isDeleting: false };
+          timer = setTimeout(tick, 300);
+        } else {
+          typeState.current = { phraseIndex, charIndex: next, isDeleting: true };
+          timer = setTimeout(tick, 38);
+        }
+      }
+    };
+    timer = setTimeout(tick, 800);
+    return () => clearTimeout(timer);
+  }, []);
+
   const onSubmit = async (e) => {
     e.preventDefault();
 
@@ -188,20 +304,36 @@ export default function StockScreener() {
     <>
       <style>{STYLE}</style>
       <main className="app">
+        <div className="hero">
+          <h1 className="hero-title">Stock Screener</h1>
+          <p className="hero-sub">
+            <span>{displayText}</span>
+            <span className="hero-cursor">_</span>
+          </p>
+        </div>
+
         <section className="search-card">
-          <form className="search-form" onSubmit={onSubmit}>
-            <input
-              className="search-input"
-              type="text"
-              placeholder="Type ticker (e.g., AAPL)"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoComplete="off"
-              spellCheck="false"
-            />
-            <button className="search-btn" type="submit" disabled={loading}>
-              {loading ? "SEARCHING" : "SEARCH"}
-            </button>
+          <form onSubmit={onSubmit}>
+            <div className="search-pill">
+              <input
+                className="search-input"
+                type="text"
+                placeholder="Ask Anything (e.g., AAPL)"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                autoComplete="off"
+                spellCheck="false"
+              />
+              <button className="search-btn" type="submit" disabled={loading}>
+                {loading ? (
+                  <span className="search-btn-spin" />
+                ) : (
+                  <svg className="search-btn-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M8 13V3M3 8l5-5 5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </button>
+            </div>
           </form>
 
           {error && <p className="error">{error}</p>}
