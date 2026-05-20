@@ -6,7 +6,7 @@ import StockDetail from "./components/StockDetail";
 
 import { useLocalStorage } from "./hooks/useLocalStorage";
 
-import { STOCKS, computeSectorMedians } from "./data/stocks";
+import { STOCKS } from "./data/stocks";
 import {
   fetchExchangeRate, fetchAllQuotes, fetchCandleData,
   fetchAnalystData, fetchNewsSentiment,
@@ -39,8 +39,6 @@ export default function StockScreener() {
     ...s,
     ...(liveQuotes[s.ticker] ?? {}),
   })), [liveQuotes]);
-
-  const sectorMedians = useMemo(() => computeSectorMedians(STOCKS), []);
 
   // Clock
   useEffect(() => {
@@ -123,7 +121,6 @@ export default function StockScreener() {
               usdToCadRate={usdToCad}
               candleData={candleCache[selected.ticker] ?? null}
               supplementary={suppCache[selected.ticker] ?? null}
-              sectorMedians={sectorMedians}
             />
           ) : (
             <StockList

@@ -2,36 +2,18 @@ const STYLE = `
   .hdr {
     display: flex;
     align-items: center;
-    height: 48px;
+    justify-content: flex-end;
+    height: 40px;
     padding: 0 20px;
     border-bottom: 1px solid var(--border);
-    background: rgba(5,5,5,0.85);
+    background: rgba(5,5,5,0.9);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     position: sticky;
     top: 0;
     z-index: 100;
     flex-shrink: 0;
-  }
-
-  .hdr-logo {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--accent);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    user-select: none;
-    flex-shrink: 0;
-  }
-  .hdr-logo-slash { color: var(--text-3); font-weight: 400; margin: 0 1px; }
-
-  .hdr-right {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-shrink: 0;
-    margin-left: auto;
+    gap: 18px;
   }
 
   .hdr-currency {
@@ -40,20 +22,20 @@ const STYLE = `
     gap: 4px;
     font-family: var(--font-mono);
     font-size: 11px;
-    cursor: pointer;
     user-select: none;
   }
   .hdr-ccy-sep { color: var(--text-3); }
-  .hdr-ccy-on  { color: var(--text-1); font-weight: 600; }
-  .hdr-ccy-off { color: var(--text-3); transition: color 0.1s; }
+  .hdr-ccy-on  { color: var(--text-1); font-weight: 600; cursor: default; }
+  .hdr-ccy-off { color: var(--text-3); cursor: pointer; transition: color 0.1s; }
   .hdr-ccy-off:hover { color: var(--text-2); }
 
   .hdr-wl {
     display: flex;
     align-items: center;
     gap: 5px;
+    font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--text-2);
+    color: var(--text-3);
     cursor: default;
   }
   .hdr-wl-star { color: var(--accent); font-size: 10px; }
@@ -84,34 +66,28 @@ export default function Header({
     <>
       <style>{STYLE}</style>
       <header className="hdr">
-        <div className="hdr-logo">
-          MKTSCAN<span className="hdr-logo-slash">/</span>PRO
+        <div className="hdr-currency">
+          <span
+            className={currency === "USD" ? "hdr-ccy-on" : "hdr-ccy-off"}
+            onClick={() => currency !== "USD" && onCurrencyToggle("USD")}
+          >USD</span>
+          <span className="hdr-ccy-sep">·</span>
+          <span
+            className={currency === "CAD" ? "hdr-ccy-on" : "hdr-ccy-off"}
+            onClick={() => currency !== "CAD" && onCurrencyToggle("CAD")}
+          >CAD</span>
         </div>
 
-        <div className="hdr-right">
-          <div className="hdr-currency">
-            <span
-              className={currency === "USD" ? "hdr-ccy-on" : "hdr-ccy-off"}
-              onClick={() => currency !== "USD" && onCurrencyToggle("USD")}
-            >USD</span>
-            <span className="hdr-ccy-sep">·</span>
-            <span
-              className={currency === "CAD" ? "hdr-ccy-on" : "hdr-ccy-off"}
-              onClick={() => currency !== "CAD" && onCurrencyToggle("CAD")}
-            >CAD</span>
+        {watchlistCount > 0 && (
+          <div className="hdr-wl">
+            <span className="hdr-wl-star">★</span>
+            <span>{watchlistCount}</span>
           </div>
+        )}
 
-          {watchlistCount > 0 && (
-            <div className="hdr-wl">
-              <span className="hdr-wl-star">★</span>
-              <span>{watchlistCount}</span>
-            </div>
-          )}
-
-          <div className="hdr-status">
-            <div className={`hdr-dot${quotesLoading ? " loading" : !quotesLive ? " offline" : ""}`} />
-            <span className="hdr-clock">{clock}</span>
-          </div>
+        <div className="hdr-status">
+          <div className={`hdr-dot${quotesLoading ? " loading" : !quotesLive ? " offline" : ""}`} />
+          <span className="hdr-clock">{clock}</span>
         </div>
       </header>
     </>

@@ -1,4 +1,4 @@
-// Canadian stocks use .TO suffix on both Yahoo Finance and Finnhub
+// Yahoo Finance uses .TO suffix for TSX-listed stocks
 export const EXCHANGE_SYMBOLS = {
   SHOP:    "SHOP.TO", CNQ:  "CNQ.TO",  RY:   "RY.TO",  TD:  "TD.TO",
   ATD:     "ATD.TO",  SU:   "SU.TO",   BCE:  "BCE.TO",  ENB: "ENB.TO",
@@ -8,6 +8,13 @@ export const EXCHANGE_SYMBOLS = {
   CAT:  "CAT",  WMT:  "WMT", UEC: "UEC",
   AAPL: "AAPL", NVDA: "NVDA", MSFT: "MSFT",
   META: "META", AMZN: "AMZN", GOOG: "GOOG",
+};
+
+// Finnhub uses TSX: prefix for Canadian stocks; US tickers pass through unchanged
+const FINNHUB_SYMBOLS = {
+  SHOP: "TSX:SHOP", CNQ:  "TSX:CNQ", RY:  "TSX:RY",  TD:  "TSX:TD",
+  ATD:  "TSX:ATD",  SU:   "TSX:SU",  BCE: "TSX:BCE", ENB: "TSX:ENB",
+  NTR:  "TSX:NTR",  ABX:  "TSX:ABX", CP:  "TSX:CP",
 };
 
 // ── Exchange rate (no API key needed) ──────────────────────────────────────
@@ -54,7 +61,7 @@ export async function fetchCandleData(ticker) {
 // ── Analyst data via /api/analyst proxy (Finnhub, optional) ───────────────
 
 export async function fetchAnalystData(ticker) {
-  const symbol = EXCHANGE_SYMBOLS[ticker] ?? ticker;
+  const symbol = FINNHUB_SYMBOLS[ticker] ?? ticker;
   try {
     const r = await fetch(`/api/analyst?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
@@ -67,7 +74,7 @@ export async function fetchAnalystData(ticker) {
 // ── News sentiment via /api/sentiment proxy (Finnhub, optional) ───────────
 
 export async function fetchNewsSentiment(ticker) {
-  const symbol = EXCHANGE_SYMBOLS[ticker] ?? ticker;
+  const symbol = FINNHUB_SYMBOLS[ticker] ?? ticker;
   try {
     const r = await fetch(`/api/sentiment?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
