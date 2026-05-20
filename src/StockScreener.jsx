@@ -129,11 +129,9 @@ export default function StockScreener() {
               onStarClick={handleStarClick}
               onSelect={handleSelect}
               currency={currency}
-              onCurrencyToggle={setCurrency}
               usdToCadRate={usdToCad}
               quotesLoading={quotesLoading}
               quotesLive={quotesLive}
-              clock={clock}
             />
           )}
         </div>

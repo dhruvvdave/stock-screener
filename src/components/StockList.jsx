@@ -201,6 +201,7 @@ const STYLE = `
   }
   .sl-chg.pos { color: var(--pos); }
   .sl-chg.neg { color: var(--neg); }
+  .sl-chg.neu { color: var(--text-3); }
   .sl-cap {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -275,7 +276,6 @@ function SkeletonList() {
 export default function StockList({
   stocks, watchlist, onStarClick, onSelect,
   currency, usdToCadRate, quotesLoading, quotesLive,
-  clock, onCurrencyToggle,
 }) {
   const [search, setSearch] = useState("");
   const inputRef = useRef(null);
@@ -341,9 +341,11 @@ export default function StockList({
             ) : (
               filtered.map(s => {
                 const { price: disp, converted } = convertPrice(s.price, s.exchange, currency, usdToCadRate);
-                const dec     = disp < 10 ? 3 : 2;
-                const priceStr = (converted ? "~$" : "$") + fmt(disp, dec);
-                const chgPos  = s.change >= 0;
+                const dec      = disp != null && disp < 10 ? 3 : 2;
+                const hasPrice = typeof disp === "number";
+                const hasChg   = typeof s.change === "number";
+                const priceStr = hasPrice ? `${converted ? "~$" : "$"}${fmt(disp, dec)}` : "—";
+                const chgPos   = hasChg && s.change >= 0;
                 const starred = watchlist.includes(s.ticker);
 
                 return (
@@ -355,8 +357,8 @@ export default function StockList({
                     </div>
                     <div className="sl-row-right">
                       <span className="sl-price">{priceStr}</span>
-                      <span className={`sl-chg ${chgPos ? "pos" : "neg"}`}>
-                        {chgPos ? "+" : ""}{fmt(s.change)}%
+                      <span className={`sl-chg ${hasChg ? (chgPos ? "pos" : "neg") : "neu"}`}>
+                        {hasChg ? `${chgPos ? "+" : ""}${fmt(s.change)}%` : "—"}
                       </span>
                       <span className="sl-cap">{fmtLarge(s.mktCap)}</span>
                       <button
