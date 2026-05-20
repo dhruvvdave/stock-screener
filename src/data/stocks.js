@@ -41,7 +41,7 @@ export function fmtLarge(n) {
 }
 
 export function fmtVol(n) {
-  if (n == null || Number.isNaN(n)) return "—";
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
   if (n >= 100) return `${n.toFixed(0)}M`;
   if (n >= 1) return `${n.toFixed(1)}M`;
   return `${(n * 1000).toFixed(0)}K`;
@@ -69,7 +69,7 @@ export function momentumScore(s) {
   const vr = volRatio(s);
   if (typeof s.change === "number" && s.change > 0) sc++;
   if (typeof s.change === "number" && s.change > 2) sc++;
-  if (vr != null && vr > 1.2) sc++;
+  if (vr !== null && vr !== undefined && vr > 1.2) sc++;
   if (typeof s.revGrowth === "number" && s.revGrowth > 15) sc++;
   if (typeof s.epsGrowth === "number" && s.epsGrowth > 10) sc++;
   return sc;

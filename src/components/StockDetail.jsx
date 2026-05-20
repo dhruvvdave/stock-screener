@@ -326,8 +326,8 @@ export default function StockDetail({
               </div>
               <div className="sd-kv">
                 <span className="sd-k">Vol / Avg</span>
-                <span className="sd-v" style={{ color: vr != null && vr > 1.5 ? "var(--accent)" : "var(--text-1)" }}>
-                  {vr != null ? `${fmt(vr, 1)}×` : "—"}
+                <span className="sd-v" style={{ color: vr !== null && vr !== undefined && vr > 1.5 ? "var(--accent)" : "var(--text-1)" }}>
+                  {vr !== null && vr !== undefined ? `${fmt(vr, 1)}×` : "—"}
                 </span>
               </div>
               <div className="sd-kv">
