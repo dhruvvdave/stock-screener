@@ -1,73 +1,46 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
-import Header        from "./components/Header";
-import Sidebar       from "./components/Sidebar";
-import StatsBar      from "./components/StatsBar";
-import Toolbar       from "./components/Toolbar";
-import ResultsTable  from "./components/ResultsTable";
-import DetailPanel   from "./components/DetailPanel";
+import Header      from "./components/Header";
+import StockList   from "./components/StockList";
+import StockDetail from "./components/StockDetail";
 
 import { useLocalStorage } from "./hooks/useLocalStorage";
-import { useDebounce }     from "./hooks/useDebounce";
 
-import { STOCKS, computeSectorMedians, volRatio, momentumScore } from "./data/stocks";
-import { DEFAULT_FILTERS, DEFAULT_COLUMNS, computeActiveFilterCount } from "./data/presets";
+import { STOCKS, computeSectorMedians } from "./data/stocks";
 import {
   fetchExchangeRate, fetchAllQuotes, fetchCandleData,
-  fetchAnalystData, fetchNewsSentiment, filterBoundToNative,
+  fetchAnalystData, fetchNewsSentiment,
 } from "./data/api";
 
 const STYLE = `
-  .app     { min-height: 100svh; display: flex; flex-direction: column; }
-  .main    { display: flex; flex: 1; overflow: hidden; height: calc(100svh - var(--header-h)); }
-  .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .app  { min-height: 100svh; display: flex; flex-direction: column; }
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 `;
 
 export default function StockScreener() {
-  const [clock, setClock]             = useState("");
-  const [filtersOpen,  setFiltersOpen]  = useState(false);
+  const [clock, setClock] = useState("");
 
   // Persisted preferences
-  const [filters,        setFilters]        = useLocalStorage("mktscan_filters",   DEFAULT_FILTERS);
-  const [watchlist,      setWatchlist]       = useLocalStorage("mktscan_watchlist", []);
-  const [visibleColumns, setVisibleColumns]  = useLocalStorage("mktscan_cols",      DEFAULT_COLUMNS);
-  const [currency,       setCurrency]        = useLocalStorage("mktscan_currency",  "USD");
+  const [watchlist, setWatchlist] = useLocalStorage("mktscan_watchlist", []);
+  const [currency,  setCurrency]  = useLocalStorage("mktscan_currency",  "USD");
 
   // Live data
-  const [usdToCad,       setUsdToCad]      = useState(1.36);
-  const [liveQuotes,     setLiveQuotes]    = useState({});
-  const [quotesLoading,  setQuotesLoading] = useState(false);
-  const [quotesLive,     setQuotesLive]    = useState(false);
-  const [candleCache,    setCandleCache]   = useState({});   // { [ticker]: number[] | null }
-  const [suppCache,      setSuppCache]     = useState({});   // { [ticker]: { analyst, sentiment } }
+  const [usdToCad,      setUsdToCad]      = useState(1.36);
+  const [liveQuotes,    setLiveQuotes]    = useState({});
+  const [quotesLoading, setQuotesLoading] = useState(false);
+  const [quotesLive,    setQuotesLive]    = useState(false);
+  const [candleCache,   setCandleCache]   = useState({});
+  const [suppCache,     setSuppCache]     = useState({});
 
-  // Scan / UI state
-  const [loading,   setLoading]   = useState(false);
-  const [results,   setResults]   = useState(STOCKS);
-  const [searchRaw, setSearchRaw] = useState("");
-  const [sortKey,   setSortKey]   = useState("mktCap");
-  const [sortDir,   setSortDir]   = useState(-1);
-  const [selected,  setSelected]  = useState(null);
-  const [scanned,   setScanned]   = useState(false);
+  // UI state
+  const [selected, setSelected] = useState(null);
 
-  const searchRef = useRef(null);
-  const search    = useDebounce(searchRaw, 150);
-
-  // Merge live quotes into STOCKS fallback
   const stocksWithLive = useMemo(() => STOCKS.map(s => ({
     ...s,
     ...(liveQuotes[s.ticker] ?? {}),
   })), [liveQuotes]);
 
-  const sectorMedians     = useMemo(() => computeSectorMedians(STOCKS), []);
-  const activeFilterCount = useMemo(() => computeActiveFilterCount(filters), [filters]);
-
-  const sorted = useMemo(() => {
-    const q = search.toUpperCase();
-    return [...results]
-      .filter(s => !search || s.ticker.includes(q) || s.name.toLowerCase().includes(search.toLowerCase()))
-      .sort((a, b) => ((a[sortKey] ?? -Infinity) - (b[sortKey] ?? -Infinity)) * sortDir);
-  }, [results, search, sortKey, sortDir]);
+  const sectorMedians = useMemo(() => computeSectorMedians(STOCKS), []);
 
   // Clock
   useEffect(() => {
@@ -77,111 +50,55 @@ export default function StockScreener() {
     return () => clearInterval(t);
   }, []);
 
-  // Keyboard shortcuts
+  // Escape to go back
   useEffect(() => {
-    const handler = (e) => {
-      if (e.key === "Escape") { setSelected(null); setFiltersOpen(false); }
-      if (e.key === "/" && document.activeElement?.tagName !== "INPUT") {
-        e.preventDefault();
-        searchRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+    const h = (e) => { if (e.key === "Escape" && selected) setSelected(null); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [selected]);
 
-  // Fetch exchange rate on mount
+  // Exchange rate
   useEffect(() => {
     fetchExchangeRate().then(setUsdToCad);
   }, []);
 
-  // Fetch live quotes on mount
+  // Live quotes
   useEffect(() => {
     setQuotesLoading(true);
-    const tickers = STOCKS.map(s => s.ticker);
-    fetchAllQuotes(tickers)
+    fetchAllQuotes(STOCKS.map(s => s.ticker))
       .then(map => {
         const obj = {};
         map.forEach((v, k) => { obj[k] = v; });
         setLiveQuotes(obj);
         setQuotesLive(map.size > 0);
       })
-      .catch(() => { setQuotesLive(false); })
+      .catch(() => setQuotesLive(false))
       .finally(() => setQuotesLoading(false));
   }, []);
 
-  // Lazy-fetch candle + supplementary data when detail panel opens
+  // Lazy candle + supplementary when detail opens
   useEffect(() => {
     if (!selected) return;
-    const ticker = selected.ticker;
-
-    if (candleCache[ticker] === undefined) {
-      setCandleCache(c => ({ ...c, [ticker]: null }));   // mark as fetching
-      fetchCandleData(ticker).then(data => {
-        setCandleCache(c => ({ ...c, [ticker]: data }));
+    const t = selected.ticker;
+    if (candleCache[t] === undefined) {
+      setCandleCache(c => ({ ...c, [t]: null }));
+      fetchCandleData(t).then(data => setCandleCache(c => ({ ...c, [t]: data })));
+    }
+    if (!suppCache[t]) {
+      Promise.all([fetchAnalystData(t), fetchNewsSentiment(t)]).then(([analyst, sentiment]) => {
+        setSuppCache(c => ({ ...c, [t]: { analyst, sentiment } }));
       });
     }
-
-    if (!suppCache[ticker]) {
-      Promise.all([
-        fetchAnalystData(ticker),
-        fetchNewsSentiment(ticker),
-      ]).then(([analyst, sentiment]) => {
-        setSuppCache(c => ({ ...c, [ticker]: { analyst, sentiment } }));
-      });
-    }
-  }, [selected?.ticker]);  // eslint-disable-line
-
-  const runScan = useCallback(() => {
-    setLoading(true);
-    setScanned(true);
-    setFiltersOpen(false);
-    setTimeout(() => {
-      const f = filters;
-      const out = stocksWithLive.filter(s => {
-        if (!f.exchanges.includes(s.exchange)) return false;
-        if (!f.sectors.includes(s.sector))    return false;
-        const toNative = (v) => filterBoundToNative(v, s.exchange, currency, usdToCad);
-        if (f.minPrice     && s.price    < toNative(f.minPrice))                             return false;
-        if (f.maxPrice     && s.price    > toNative(f.maxPrice))                             return false;
-        if (f.minPE        && (s.pe == null || s.pe < +f.minPE))                            return false;
-        if (f.maxPE        && (s.pe == null || s.pe > +f.maxPE))                            return false;
-        if (f.minPB        && s.pb       < +f.minPB)                                        return false;
-        if (f.maxPB        && s.pb       > +f.maxPB)                                        return false;
-        if (f.minEPSGrowth && (s.epsGrowth == null || s.epsGrowth < +f.minEPSGrowth))      return false;
-        if (f.minRevGrowth && s.revGrowth < +f.minRevGrowth)                                return false;
-        if (f.minVolRatio  && s.vol / s.avgVol < +f.minVolRatio)                            return false;
-        if (f.minMktCap    && s.mktCap   < +f.minMktCap)                                    return false;
-        if (f.maxMktCap    && s.mktCap   > +f.maxMktCap)                                    return false;
-        return true;
-      });
-      setResults(out);
-      setLoading(false);
-    }, 900);
-  }, [filters, stocksWithLive, currency, usdToCad]);
-
-  const handleSort = useCallback((key) => {
-    setSortKey(prev => { if (prev === key) setSortDir(d => -d); else setSortDir(-1); return key; });
-  }, []);
-
-  const handleExport = useCallback(() => {
-    const ccy = currency;
-    const headers = ["Ticker","Name","Exchange","Sector",`Price (${ccy})`,"Change%","PE","PB","EPS Gr%","Rev Gr%","Vol","Avg Vol","Mkt Cap ($B)"];
-    const rows = sorted.map(s => {
-      return [s.ticker, `"${s.name}"`, s.exchange, s.sector, s.price, s.change, s.pe ?? "", s.pb, s.epsGrowth ?? "", s.revGrowth, s.vol, s.avgVol, s.mktCap];
-    });
-    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
-    const a = Object.assign(document.createElement("a"), {
-      href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
-      download: `mktscan_${Date.now()}.csv`,
-    });
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }, [sorted, currency]);
+  }, [selected?.ticker]); // eslint-disable-line
 
   const handleStarClick = useCallback((t) => {
     setWatchlist(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
   }, [setWatchlist]);
+
+  const handleSelect = useCallback((stock) => {
+    const live = stocksWithLive.find(s => s.ticker === stock.ticker) ?? stock;
+    setSelected(live);
+  }, [stocksWithLive]);
 
   return (
     <>
@@ -192,68 +109,38 @@ export default function StockScreener() {
           watchlistCount={watchlist.length}
           currency={currency}
           onCurrencyToggle={setCurrency}
-          onFiltersOpen={() => setFiltersOpen(true)}
-          activeFilterCount={activeFilterCount}
           quotesLoading={quotesLoading}
           quotesLive={quotesLive}
         />
-
         <div className="main">
-          <Sidebar
-            filters={filters}
-            onFiltersChange={setFilters}
-            onRunScan={runScan}
-            onReset={() => setFilters(DEFAULT_FILTERS)}
-            loading={loading}
-            activeFilterCount={activeFilterCount}
-            open={filtersOpen}
-            onClose={() => setFiltersOpen(false)}
-          />
-
-          <div className="content">
-            <StatsBar results={results} totalCount={STOCKS.length} visible={scanned} />
-
-            <Toolbar
-              ref={searchRef}
-              resultCount={sorted.length}
-              searchValue={searchRaw}
-              onSearchChange={setSearchRaw}
-              visibleColumns={visibleColumns}
-              onColumnToggle={col => setVisibleColumns(p => ({ ...p, [col]: !p[col] }))}
-              onExport={handleExport}
-            />
-
-            <ResultsTable
-              rows={sorted}
-              loading={loading}
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSort={handleSort}
-              onRowClick={setSelected}
-              onStarClick={handleStarClick}
+          {selected ? (
+            <StockDetail
+              stock={selected}
+              onBack={() => setSelected(null)}
               watchlist={watchlist}
-              visibleColumns={visibleColumns}
-              sectorMedians={sectorMedians}
+              onStarClick={handleStarClick}
               currency={currency}
               usdToCadRate={usdToCad}
+              candleData={candleCache[selected.ticker] ?? null}
+              supplementary={suppCache[selected.ticker] ?? null}
+              sectorMedians={sectorMedians}
             />
-          </div>
+          ) : (
+            <StockList
+              stocks={stocksWithLive}
+              watchlist={watchlist}
+              onStarClick={handleStarClick}
+              onSelect={handleSelect}
+              currency={currency}
+              onCurrencyToggle={setCurrency}
+              usdToCadRate={usdToCad}
+              quotesLoading={quotesLoading}
+              quotesLive={quotesLive}
+              clock={clock}
+            />
+          )}
         </div>
       </div>
-
-      <DetailPanel
-        stock={selected}
-        onClose={() => setSelected(null)}
-        watchlist={watchlist}
-        onStarClick={handleStarClick}
-        volRatio={volRatio}
-        momentumScore={momentumScore}
-        sectorMedians={sectorMedians}
-        currency={currency}
-        usdToCadRate={usdToCad}
-        candleData={selected ? (candleCache[selected.ticker] ?? null) : null}
-        supplementary={selected ? (suppCache[selected.ticker] ?? null) : null}
-      />
     </>
   );
 }
