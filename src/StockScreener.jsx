@@ -1,183 +1,245 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-
-import Header      from "./components/Header";
-import StockList   from "./components/StockList";
-import StockDetail from "./components/StockDetail";
-
-import { useLocalStorage } from "./hooks/useLocalStorage";
-
-import { STOCKS } from "./data/stocks";
-import {
-  fetchExchangeRate, fetchAllQuotes, fetchSupplementaryQuotes,
-  fetchCandleData, fetchAnalystData, fetchNewsSentiment,
-} from "./data/api";
+import { useState } from "react";
 
 const STYLE = `
-  .app  { min-height: 100svh; display: flex; flex-direction: column; }
-  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .app {
+    min-height: 100svh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .search-card {
+    width: 100%;
+    max-width: 520px;
+  }
+
+  .search-form {
+    display: flex;
+    gap: 10px;
+  }
+
+  .search-input {
+    flex: 1;
+    height: 44px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-1);
+    padding: 0 14px;
+    font-size: 15px;
+    outline: none;
+    font-family: var(--font-ui);
+  }
+
+  .search-input:focus {
+    border-color: rgba(255, 255, 255, 0.28);
+  }
+
+  .search-btn {
+    height: 44px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-1);
+    border-radius: 10px;
+    padding: 0 16px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+
+  .search-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .error {
+    margin-top: 12px;
+    color: var(--neg);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .quote {
+    margin-top: 20px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .quote-symbol {
+    font-family: var(--font-mono);
+    color: var(--accent);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+
+  .quote-price {
+    font-family: var(--font-mono);
+    font-size: 30px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .quote-change {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    margin-bottom: 14px;
+  }
+
+  .quote-change.pos { color: var(--pos); }
+  .quote-change.neg { color: var(--neg); }
+
+  .quote-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+  }
+
+  .quote-k {
+    color: var(--text-3);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .quote-v {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    margin-top: 2px;
+  }
 `;
 
+function formatCurrency(value) {
+  return typeof value === "number" ? `$${value.toFixed(2)}` : "—";
+}
+
+function formatPercent(value) {
+  if (typeof value !== "number") return "—";
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function formatChange(value) {
+  if (typeof value !== "number") return "—";
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
+}
+
+function formatUpdated(timestamp) {
+  if (!timestamp) return "—";
+  return new Date(timestamp * 1000).toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+  });
+}
+
 export default function StockScreener() {
-  const [clock, setClock] = useState("");
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [quote, setQuote] = useState(null);
 
-  // Persisted preferences
-  const [watchlist,     setWatchlist]     = useLocalStorage("mktscan_watchlist", []);
-  const [currency,      setCurrency]      = useLocalStorage("mktscan_currency",  "USD");
-  const [dynamicStocks, setDynamicStocks] = useLocalStorage("mktscan_dynamic",   []);
+  const onSubmit = async (e) => {
+    e.preventDefault();
 
-  // Live data
-  const [usdToCad,      setUsdToCad]      = useState(1.36);
-  const [liveQuotes,    setLiveQuotes]    = useState({});
-  const [quotesLoading, setQuotesLoading] = useState(false);
-  const [quotesLive,    setQuotesLive]    = useState(false);
-  const [candleCache,   setCandleCache]   = useState({});
-  const [suppCache,     setSuppCache]     = useState({});
-
-  // UI state
-  const [selected, setSelected] = useState(null);
-
-  const allStocks = useMemo(() => [...STOCKS, ...dynamicStocks], [dynamicStocks]);
-
-  const stocksWithLive = useMemo(() => allStocks.map(s => ({
-    ...s,
-    ...(liveQuotes[s.ticker] ?? {}),
-  })), [allStocks, liveQuotes]);
-
-  // Clock
-  useEffect(() => {
-    const tick = () => setClock(new Date().toLocaleTimeString("en-US", { hour12: false }));
-    tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  // Escape to go back
-  useEffect(() => {
-    const h = (e) => { if (e.key === "Escape" && selected) setSelected(null); };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [selected]);
-
-  // Exchange rate
-  useEffect(() => {
-    fetchExchangeRate().then(setUsdToCad);
-  }, []);
-
-  // Live quotes — Finnhub prices + Yahoo supplementary data
-  useEffect(() => {
-    setQuotesLoading(true);
-
-    Promise.all([
-      fetchAllQuotes(allStocks),
-      fetchSupplementaryQuotes(allStocks),
-    ])
-      .then(([quotesMap, suppData]) => {
-        const obj = {};
-        // Supplementary data (Yahoo) as base — includes pe, pb, beta, vol, mktCap, etc.
-        for (const [t, v] of Object.entries(suppData)) obj[t] = { ...v };
-        // Finnhub price/change wins (more real-time)
-        quotesMap.forEach((v, k) => { obj[k] = { ...(obj[k] ?? {}), ...v }; });
-        setLiveQuotes(obj);
-        setQuotesLive(quotesMap.size > 0);
-      })
-      .catch(() => setQuotesLive(false))
-      .finally(() => setQuotesLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Lazy candle + supplementary when detail opens
-  useEffect(() => {
-    if (!selected) return;
-    const t = selected.ticker;
-    if (candleCache[t] === undefined) {
-      setCandleCache(c => ({ ...c, [t]: null }));
-      fetchCandleData(t, selected.exchange, "1y")
-        .then(data => setCandleCache(c => ({ ...c, [t]: data })));
+    const symbol = query.trim().toUpperCase();
+    if (!symbol) {
+      setError("Enter a ticker symbol (e.g., AAPL).");
+      setQuote(null);
+      return;
     }
-    if (!suppCache[t]) {
-      Promise.all([fetchAnalystData(t), fetchNewsSentiment(t)]).then(([analyst, sentiment]) => {
-        setSuppCache(c => ({ ...c, [t]: { analyst, sentiment } }));
-      });
+
+    setLoading(true);
+    setError("");
+    setQuote(null);
+
+    try {
+      const response = await fetch(`/api/stock?symbol=${encodeURIComponent(symbol)}`);
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Unable to fetch quote.");
+      }
+
+      setQuote(payload);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to fetch quote.");
+    } finally {
+      setLoading(false);
     }
-  }, [selected?.ticker]); // eslint-disable-line
+  };
 
-  const handleStarClick = useCallback((t) => {
-    setWatchlist(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
-  }, [setWatchlist]);
-
-  const handleSelect = useCallback((stock) => {
-    const live = stocksWithLive.find(s => s.ticker === stock.ticker) ?? stock;
-    setSelected(live);
-  }, [stocksWithLive]);
-
-  // Add a dynamically searched stock to the list and immediately fetch its data
-  const handleAddStock = useCallback((result) => {
-    const newStock = {
-      ticker:   result.symbol,
-      name:     result.name,
-      exchange: result.exchange,
-      sector:   "—",
-    };
-
-    setDynamicStocks(prev => {
-      if (prev.some(s => s.ticker === newStock.ticker)) return prev;
-      return [...prev, newStock];
-    });
-
-    // Fetch quotes for the new stock immediately
-    Promise.all([
-      fetchAllQuotes([newStock]),
-      fetchSupplementaryQuotes([newStock]),
-    ]).then(([quotesMap, suppData]) => {
-      setLiveQuotes(prev => {
-        const merged = { ...prev };
-        for (const [t, v] of Object.entries(suppData)) merged[t] = { ...(merged[t] ?? {}), ...v };
-        quotesMap.forEach((v, k) => { merged[k] = { ...(merged[k] ?? {}), ...v }; });
-        return merged;
-      });
-    });
-
-    setSelected(newStock);
-  }, [setDynamicStocks]);
+  const changeClass =
+    typeof quote?.changePercent === "number"
+      ? quote.changePercent >= 0
+        ? "pos"
+        : "neg"
+      : "";
 
   return (
     <>
       <style>{STYLE}</style>
-      <div className="app">
-        <Header
-          clock={clock}
-          watchlistCount={watchlist.length}
-          currency={currency}
-          onCurrencyToggle={setCurrency}
-          quotesLoading={quotesLoading}
-          quotesLive={quotesLive}
-        />
-        <div className="main">
-          {selected ? (
-            <StockDetail
-              stock={selected}
-              onBack={() => setSelected(null)}
-              watchlist={watchlist}
-              onStarClick={handleStarClick}
-              currency={currency}
-              usdToCadRate={usdToCad}
-              candleData={candleCache[selected.ticker] ?? null}
-              supplementary={suppCache[selected.ticker] ?? null}
+      <main className="app">
+        <section className="search-card">
+          <form className="search-form" onSubmit={onSubmit}>
+            <input
+              className="search-input"
+              type="text"
+              placeholder="Type ticker (e.g., AAPL)"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              autoComplete="off"
+              spellCheck="false"
             />
-          ) : (
-            <StockList
-              stocks={stocksWithLive}
-              watchlist={watchlist}
-              onStarClick={handleStarClick}
-              onSelect={handleSelect}
-              onAddStock={handleAddStock}
-              currency={currency}
-              usdToCadRate={usdToCad}
-              quotesLoading={quotesLoading}
-              quotesLive={quotesLive}
-            />
+            <button className="search-btn" type="submit" disabled={loading}>
+              {loading ? "SEARCHING" : "SEARCH"}
+            </button>
+          </form>
+
+          {error && <p className="error">{error}</p>}
+
+          {quote && (
+            <article className="quote">
+              <div className="quote-symbol">{quote.symbol}</div>
+              <div className="quote-price">{formatCurrency(quote.price)}</div>
+              <div className={`quote-change ${changeClass}`}>
+                {formatChange(quote.change)} ({formatPercent(quote.changePercent)})
+              </div>
+
+              <div className="quote-grid">
+                <div>
+                  <div className="quote-k">Open</div>
+                  <div className="quote-v">{formatCurrency(quote.open)}</div>
+                </div>
+                <div>
+                  <div className="quote-k">Previous Close</div>
+                  <div className="quote-v">{formatCurrency(quote.previousClose)}</div>
+                </div>
+                <div>
+                  <div className="quote-k">High</div>
+                  <div className="quote-v">{formatCurrency(quote.high)}</div>
+                </div>
+                <div>
+                  <div className="quote-k">Low</div>
+                  <div className="quote-v">{formatCurrency(quote.low)}</div>
+                </div>
+                <div>
+                  <div className="quote-k">Updated</div>
+                  <div className="quote-v">{formatUpdated(quote.timestamp)}</div>
+                </div>
+              </div>
+            </article>
           )}
-        </div>
-      </div>
+        </section>
+      </main>
     </>
   );
 }

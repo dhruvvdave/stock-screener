@@ -1,22 +1,43 @@
 # stock-screener
 
-Uses live stock quotes from Finnhub through the serverless `/api/stock` proxy.
+Minimal stock lookup app powered by Finnhub.
 
-## Environment variables
+## Setup
 
-Set this in Vercel (or locally in `.env`):
+Create a `.env` file (or configure in Vercel) with:
 
-- `FINNHUB_KEY` — your Finnhub API key
+- `FINNHUB_KEY=your_finnhub_api_key`
 
-The key is only read server-side in `/api/stock.js` and is never exposed to the browser.
+The key is only read server-side by `/api/stock`.
 
-## Local development
+## Run locally
 
 ```bash
 npm ci
 npm run dev
 ```
 
-Then open the app and it will request live quotes via:
+Then open the app, type a ticker (for example `AAPL`), and submit.
 
-- `/api/stock?symbol=AAPL`
+## Behavior
+
+- The UI is intentionally minimal: one ticker input and submit button.
+- Nothing is displayed until a ticker is searched.
+- Quotes are fetched live from Finnhub through `/api/stock`.
+- Invalid symbols and API errors are shown as inline error messages.
+
+## API response used by the UI
+
+`GET /api/stock?symbol=AAPL`
+
+Returns:
+
+- `symbol`
+- `price`
+- `change`
+- `changePercent`
+- `open`
+- `high`
+- `low`
+- `previousClose`
+- `timestamp`
