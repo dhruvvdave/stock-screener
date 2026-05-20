@@ -1,7 +1,7 @@
 import AreaChart    from "./AreaChart";
 import MomentumDots from "./MomentumDots";
 import AIInsights   from "./AIInsights";
-import { fmt, fmtLarge, fmtVol, volRatio, momentumScore } from "../data/stocks";
+import { fmt, fmtLarge, volRatio, momentumScore } from "../data/stocks";
 import { convertPrice } from "../data/api";
 
 const STYLE = `
@@ -12,19 +12,14 @@ const STYLE = `
   }
 
   .sd-container {
-    max-width: 880px;
+    max-width: 820px;
     margin: 0 auto;
     padding: 0 24px 80px;
     width: 100%;
   }
 
-  /* Back nav */
   .sd-nav {
-    display: flex;
-    align-items: center;
-    gap: 10px;
     padding: 24px 0 0;
-    margin-bottom: 0;
   }
   .sd-back {
     background: none;
@@ -37,22 +32,12 @@ const STYLE = `
     display: flex;
     align-items: center;
     gap: 6px;
-    transition: color 0.1s;
+    transition: color 0.15s;
     touch-action: manipulation;
   }
   .sd-back:hover { color: var(--text-1); }
-  .sd-crumb {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-3);
-    letter-spacing: 0.04em;
-  }
 
-  /* Hero */
-  .sd-hero {
-    padding: 28px 0 36px;
-    border-bottom: 1px solid var(--border);
-  }
+  .sd-hero { padding: 28px 0 24px; }
   .sd-hero-row {
     display: flex;
     justify-content: space-between;
@@ -61,16 +46,15 @@ const STYLE = `
     flex-wrap: wrap;
   }
 
-  .sd-hero-left { min-width: 0; }
   .sd-ticker-line {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
   }
   .sd-ticker {
     font-family: var(--font-mono);
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 700;
     color: var(--accent);
     letter-spacing: 0.02em;
@@ -79,7 +63,7 @@ const STYLE = `
   .sd-star {
     background: none;
     border: none;
-    font-size: 20px;
+    font-size: 16px;
     cursor: pointer;
     color: var(--text-3);
     padding: 2px 4px;
@@ -90,40 +74,35 @@ const STYLE = `
   .sd-star.on  { color: var(--accent); }
   .sd-star:hover { color: var(--accent); }
 
-  .sd-company {
-    font-size: 15px;
-    color: var(--text-2);
-    margin-bottom: 12px;
-    font-weight: 400;
-  }
-  .sd-chips { display: flex; gap: 14px; }
+  .sd-company { font-size: 14px; color: var(--text-2); margin-bottom: 10px; }
+  .sd-chips { display: flex; gap: 12px; }
   .sd-chip {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 10px;
     color: var(--text-3);
     letter-spacing: 0.04em;
   }
 
-  .sd-hero-right { flex-shrink: 0; text-align: right; }
-  .sd-price-row {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-  }
+  .sd-price-block { text-align: right; }
   .sd-price {
     font-family: var(--font-mono);
-    font-size: 38px;
+    font-size: 34px;
     font-weight: 700;
     color: var(--text-1);
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
     line-height: 1;
   }
+  .sd-chg-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+  }
   .sd-chg {
     font-family: var(--font-mono);
-    font-size: 17px;
+    font-size: 14px;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
   }
@@ -131,50 +110,38 @@ const STYLE = `
   .sd-chg.neg { color: var(--neg); }
   .sd-ccy-note {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 10px;
     color: var(--text-3);
-    margin-top: 4px;
   }
 
-  /* Chart */
-  .sd-chart { padding: 28px 0 0; }
-  .sd-chart-hd {
+  .sd-divider { height: 1px; background: var(--border); }
+
+  .sd-chart { padding: 20px 0; }
+  .sd-chart-label {
+    font-family: var(--font-mono);
     font-size: 10px;
-    font-weight: 600;
     color: var(--text-3);
-    letter-spacing: 0.10em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     margin-bottom: 12px;
     display: flex;
-    align-items: center;
     gap: 8px;
+    align-items: center;
   }
-  .sd-live { font-size: 9px; color: var(--pos); letter-spacing: 0.04em; }
-  .sd-sim  { font-size: 9px; color: var(--text-3); }
+  .sd-live { color: var(--pos); }
 
-  /* Sections */
-  .sd-section { padding: 28px 0 0; }
-  .sd-section-hd {
-    font-size: 9px;
-    font-weight: 600;
-    color: var(--text-3);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    margin-bottom: 18px;
-  }
-
-  /* Metrics grid */
-  .sd-grid {
+  .sd-metrics { padding: 20px 0; }
+  .sd-metrics-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 22px 28px;
-    padding-bottom: 4px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px 16px;
   }
   .sd-kv { display: flex; flex-direction: column; gap: 5px; }
   .sd-k {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--text-3);
-    line-height: 1.3;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
   }
   .sd-v {
     font-family: var(--font-mono);
@@ -184,16 +151,24 @@ const STYLE = `
     font-variant-numeric: tabular-nums;
   }
 
-  /* Analyst */
+  .sd-analyst { padding: 20px 0; }
+  .sd-section-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
   .sd-analyst-row {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   .sd-cons {
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.06em;
     flex-shrink: 0;
@@ -203,76 +178,69 @@ const STYLE = `
   .sd-cons.hold { color: var(--text-2); }
   .sd-bars { display: flex; gap: 2px; flex: 1; height: 3px; }
   .sd-bar  { border-radius: 2px; }
-  .sd-analyst-meta {
-    font-size: 11px;
-    color: var(--text-3);
-    line-height: 1.6;
-  }
+  .sd-analyst-meta { font-size: 11px; color: var(--text-3); line-height: 1.6; }
 
   @media (max-width: 640px) {
-    .sd-price  { font-size: 28px; }
-    .sd-ticker { font-size: 22px; }
-    .sd-chg    { font-size: 14px; }
-    .sd-hero-row { flex-direction: column; gap: 16px; }
-    .sd-hero-right { text-align: left; }
-    .sd-price-row  { justify-content: flex-start; }
-    .sd-grid { grid-template-columns: 1fr 1fr; }
+    .sd-price  { font-size: 26px; }
+    .sd-ticker { font-size: 20px; }
+    .sd-hero-row { flex-direction: column; gap: 12px; }
+    .sd-price-block { text-align: left; }
+    .sd-chg-row { justify-content: flex-start; }
+    .sd-metrics-grid { grid-template-columns: repeat(2, 1fr); }
   }
 `;
-
-function pClr(v, med) {
-  return v == null || med == null ? "var(--text-1)" : v < med ? "var(--pos)" : "var(--neg)";
-}
 
 function AnalystSection({ analyst, sentiment }) {
   if (!analyst?.total) return null;
   const { buy, hold, sell, total, meanTarget, highTarget, lowTarget } = analyst;
   const consensus = buy > hold && buy > sell ? "BUY"
-    : sell > buy  && sell > hold ? "SELL"
+    : sell > buy && sell > hold ? "SELL"
     : "HOLD";
   const consCls = consensus === "BUY" ? "buy" : consensus === "SELL" ? "sell" : "hold";
 
   return (
-    <div className="sd-section">
-      <div className="sd-section-hd">Analyst Consensus</div>
-      <div className="sd-analyst-row">
-        <span className={`sd-cons ${consCls}`}>{consensus}</span>
-        <div className="sd-bars">
-          {buy  > 0 && <div className="sd-bar" style={{ flex: buy,  background: "var(--pos)" }} />}
-          {hold > 0 && <div className="sd-bar" style={{ flex: hold, background: "var(--text-3)" }} />}
-          {sell > 0 && <div className="sd-bar" style={{ flex: sell, background: "var(--neg)" }} />}
+    <>
+      <div className="sd-divider" />
+      <div className="sd-analyst">
+        <div className="sd-section-label">Analyst consensus</div>
+        <div className="sd-analyst-row">
+          <span className={`sd-cons ${consCls}`}>{consensus}</span>
+          <div className="sd-bars">
+            {buy  > 0 && <div className="sd-bar" style={{ flex: buy,  background: "var(--pos)" }} />}
+            {hold > 0 && <div className="sd-bar" style={{ flex: hold, background: "var(--text-3)" }} />}
+            {sell > 0 && <div className="sd-bar" style={{ flex: sell, background: "var(--neg)" }} />}
+          </div>
+          <span className="sd-analyst-meta">{total} analysts</span>
         </div>
-        <span className="sd-analyst-meta">{total} analysts</span>
+        {meanTarget != null && (
+          <div className="sd-analyst-meta">
+            Target ${fmt(meanTarget, 2)}
+            {highTarget && lowTarget && ` · range $${fmt(lowTarget, 2)}–$${fmt(highTarget, 2)}`}
+          </div>
+        )}
+        {sentiment?.bullish != null && (
+          <div className="sd-analyst-meta" style={{ marginTop: 4 }}>
+            News {Math.round(sentiment.bullish * 100)}% bullish
+            {sentiment.articles > 0 && ` · ${sentiment.articles} articles/week`}
+          </div>
+        )}
       </div>
-      {meanTarget != null && (
-        <div className="sd-analyst-meta">
-          Target ${fmt(meanTarget, 2)}
-          {highTarget && lowTarget && ` · range $${fmt(lowTarget, 2)}–$${fmt(highTarget, 2)}`}
-        </div>
-      )}
-      {sentiment?.bullish != null && (
-        <div className="sd-analyst-meta" style={{ marginTop: 4 }}>
-          News {Math.round(sentiment.bullish * 100)}% bullish
-          {sentiment.articles > 0 && ` · ${sentiment.articles} articles/week`}
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 
 export default function StockDetail({
   stock: s, onBack, watchlist, onStarClick,
-  currency, usdToCadRate, sectorMedians,
+  currency, usdToCadRate,
   candleData, supplementary,
 }) {
   if (!s) return null;
-  const starred  = watchlist.includes(s.ticker);
+  const starred = watchlist.includes(s.ticker);
   const { price: disp, converted } = convertPrice(s.price, s.exchange, currency, usdToCadRate);
-  const dec      = disp < 10 ? 3 : 2;
-  const chgPos   = s.change >= 0;
-  const vr       = volRatio(s);
-  const ms       = momentumScore(s);
-  const med      = sectorMedians[s.sector] ?? {};
+  const dec    = disp < 10 ? 3 : 2;
+  const chgPos = s.change >= 0;
+  const vr     = volRatio(s);
+  const ms     = momentumScore(s);
 
   return (
     <>
@@ -280,16 +248,13 @@ export default function StockDetail({
       <div className="sd-page">
         <div className="sd-container">
 
-          {/* Back nav */}
           <div className="sd-nav">
             <button className="sd-back" onClick={onBack}>← All stocks</button>
-            <span className="sd-crumb">/ {s.ticker}</span>
           </div>
 
-          {/* Hero */}
           <div className="sd-hero">
             <div className="sd-hero-row">
-              <div className="sd-hero-left">
+              <div>
                 <div className="sd-ticker-line">
                   <span className="sd-ticker">{s.ticker}</span>
                   <button className={`sd-star ${starred ? "on" : ""}`} onClick={() => onStarClick(s.ticker)}>
@@ -303,88 +268,59 @@ export default function StockDetail({
                 </div>
               </div>
 
-              <div className="sd-hero-right">
-                <div className="sd-price-row">
-                  <span className="sd-price">{converted && "~"}${fmt(disp, dec)}</span>
+              <div className="sd-price-block">
+                <div className="sd-price">{converted && "~"}${fmt(disp, dec)}</div>
+                <div className="sd-chg-row">
                   <span className={`sd-chg ${chgPos ? "pos" : "neg"}`}>
                     {chgPos ? "+" : ""}{fmt(s.change)}%
                   </span>
+                  {converted && <span className="sd-ccy-note">{currency}</span>}
                 </div>
-                {converted && <div className="sd-ccy-note">converted to {currency}</div>}
               </div>
             </div>
           </div>
 
-          {/* Chart */}
+          <div className="sd-divider" />
+
           <div className="sd-chart">
-            <div className="sd-chart-hd">
+            <div className="sd-chart-label">
               30-day price
-              {candleData
-                ? <span className="sd-live">live</span>
-                : <span className="sd-sim">simulated</span>}
+              {candleData ? <span className="sd-live">live</span> : <span>simulated</span>}
             </div>
-            <AreaChart positive={chgPos} prices={candleData ?? null} width={832} height={160} />
+            <AreaChart positive={chgPos} prices={candleData ?? null} width={772} height={140} />
           </div>
 
-          {/* Valuation */}
-          <div className="sd-section">
-            <div className="sd-section-hd">Valuation</div>
-            <div className="sd-grid">
+          <div className="sd-divider" />
+
+          <div className="sd-metrics">
+            <div className="sd-metrics-grid">
               <div className="sd-kv">
-                <span className="sd-k">P/E Ratio</span>
-                <span className="sd-v" style={{ color: pClr(s.pe, med.pe) }}>
-                  {s.pe ? fmt(s.pe, 1) : "—"}
-                </span>
+                <span className="sd-k">P/E</span>
+                <span className="sd-v">{s.pe ? fmt(s.pe, 1) : "—"}</span>
               </div>
               <div className="sd-kv">
-                <span className="sd-k">Sector P/E</span>
-                <span className="sd-v" style={{ color: "var(--text-2)" }}>
-                  {med.pe ? fmt(med.pe, 1) : "—"}
-                </span>
-              </div>
-              <div className="sd-kv">
-                <span className="sd-k">P/B Ratio</span>
-                <span className="sd-v" style={{ color: pClr(s.pb, med.pb) }}>
-                  {fmt(s.pb, 1)}
-                </span>
+                <span className="sd-k">P/B</span>
+                <span className="sd-v">{s.pb ? fmt(s.pb, 1) : "—"}</span>
               </div>
               <div className="sd-kv">
                 <span className="sd-k">Beta</span>
-                <span className="sd-v">{fmt(s.beta)}</span>
+                <span className="sd-v">{s.beta ? fmt(s.beta) : "—"}</span>
               </div>
-            </div>
-          </div>
-
-          {/* Growth */}
-          <div className="sd-section">
-            <div className="sd-section-hd">Growth</div>
-            <div className="sd-grid">
+              <div className="sd-kv">
+                <span className="sd-k">Mkt Cap</span>
+                <span className="sd-v">{fmtLarge(s.mktCap)}</span>
+              </div>
               <div className="sd-kv">
                 <span className="sd-k">EPS Growth</span>
-                <span className="sd-v" style={{ color: s.epsGrowth > 0 ? "var(--pos)" : s.epsGrowth < 0 ? "var(--neg)" : "var(--text-2)" }}>
+                <span className="sd-v" style={{ color: s.epsGrowth > 0 ? "var(--pos)" : s.epsGrowth < 0 ? "var(--neg)" : "var(--text-1)" }}>
                   {s.epsGrowth != null ? (s.epsGrowth > 0 ? "+" : "") + s.epsGrowth + "%" : "—"}
                 </span>
               </div>
               <div className="sd-kv">
-                <span className="sd-k">Revenue Growth</span>
+                <span className="sd-k">Rev Growth</span>
                 <span className="sd-v" style={{ color: s.revGrowth > 0 ? "var(--pos)" : "var(--neg)" }}>
-                  {s.revGrowth > 0 ? "+" : ""}{s.revGrowth}%
+                  {s.revGrowth != null ? (s.revGrowth > 0 ? "+" : "") + s.revGrowth + "%" : "—"}
                 </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Volume & Momentum */}
-          <div className="sd-section">
-            <div className="sd-section-hd">Volume & Momentum</div>
-            <div className="sd-grid">
-              <div className="sd-kv">
-                <span className="sd-k">Today's volume</span>
-                <span className="sd-v">{fmtVol(s.vol)}</span>
-              </div>
-              <div className="sd-kv">
-                <span className="sd-k">Avg daily vol</span>
-                <span className="sd-v">{fmtVol(s.avgVol)}</span>
               </div>
               <div className="sd-kv">
                 <span className="sd-k">Vol / Avg</span>
@@ -401,29 +337,13 @@ export default function StockDetail({
             </div>
           </div>
 
-          {/* Size */}
-          <div className="sd-section">
-            <div className="sd-section-hd">Size</div>
-            <div className="sd-grid">
-              <div className="sd-kv">
-                <span className="sd-k">Market cap</span>
-                <span className="sd-v">{fmtLarge(s.mktCap)}</span>
-              </div>
-              <div className="sd-kv">
-                <span className="sd-k">Exchange</span>
-                <span className="sd-v" style={{ color: "var(--text-2)" }}>{s.exchange}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Analyst */}
           <AnalystSection
             analyst={supplementary?.analyst ?? null}
             sentiment={supplementary?.sentiment ?? null}
           />
 
-          {/* AI */}
-          <div className="sd-section">
+          <div className="sd-divider" />
+          <div style={{ paddingTop: 20 }}>
             <AIInsights
               stock={s}
               analystData={supplementary?.analyst ?? null}
