@@ -1,5 +1,5 @@
 // Yahoo Finance uses .TO suffix for TSX-listed stocks
-export const EXCHANGE_SYMBOLS = {
+export const YAHOO_SYMBOLS = {
   SHOP:    "SHOP.TO", CNQ:  "CNQ.TO",  RY:   "RY.TO",  TD:  "TD.TO",
   ATD:     "ATD.TO",  SU:   "SU.TO",   BCE:  "BCE.TO",  ENB: "ENB.TO",
   NTR:     "NTR.TO",  ABX:  "ABX.TO",  CP:   "CP.TO",
@@ -15,6 +15,7 @@ const FINNHUB_SYMBOLS = {
   SHOP: "TSX:SHOP", CNQ:  "TSX:CNQ", RY:  "TSX:RY",  TD:  "TSX:TD",
   ATD:  "TSX:ATD",  SU:   "TSX:SU",  BCE: "TSX:BCE", ENB: "TSX:ENB",
   NTR:  "TSX:NTR",  ABX:  "TSX:ABX", CP:  "TSX:CP",
+  "GSI.V": "TSXV:GSI",
 };
 
 // ── Exchange rate (no API key needed) ──────────────────────────────────────
@@ -29,25 +30,35 @@ export async function fetchExchangeRate() {
   }
 }
 
-// ── Yahoo Finance quotes via /api/quotes proxy (no key needed) ────────────
+// ── Finnhub quotes via /api/stock proxy (FINNHUB_KEY) ─────────────────────
 
 export async function fetchAllQuotes(tickers) {
-  const symbols = tickers.map(t => EXCHANGE_SYMBOLS[t] ?? t);
-  const r = await fetch(`/api/quotes?symbols=${symbols.join(",")}`);
-  if (!r.ok) throw new Error(`quotes API ${r.status}`);
-  const data = await r.json();
   const result = new Map();
-  tickers.forEach(t => {
-    const sym = EXCHANGE_SYMBOLS[t] ?? t;
-    if (data[sym]) result.set(t, data[sym]);
-  });
+
+  await Promise.all(tickers.map(async (ticker) => {
+    const symbol = FINNHUB_SYMBOLS[ticker] ?? ticker;
+    try {
+      const r = await fetch(`/api/stock?symbol=${encodeURIComponent(symbol)}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      if (typeof data?.price === "number") {
+        result.set(ticker, {
+          price: data.price,
+          change: typeof data.change === "number" ? data.change : null,
+        });
+      }
+    } catch {
+      // skip this ticker and continue resolving other quotes
+    }
+  }));
+
   return result;
 }
 
 // ── Yahoo Finance candle data via /api/candle proxy (no key needed) ───────
 
 export async function fetchCandleData(ticker) {
-  const symbol = EXCHANGE_SYMBOLS[ticker] ?? ticker;
+  const symbol = YAHOO_SYMBOLS[ticker] ?? ticker;
   try {
     const r = await fetch(`/api/candle?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
@@ -91,6 +102,7 @@ export function isCADExchange(exchange) {
 }
 
 export function convertPrice(price, exchange, displayCurrency, usdToCad) {
+  if (typeof price !== "number") return { price: null, converted: false };
   const cad = isCADExchange(exchange);
   if (displayCurrency === "CAD" && !cad) return { price: price * usdToCad,  converted: true };
   if (displayCurrency === "USD" &&  cad) return { price: price / usdToCad,  converted: true };

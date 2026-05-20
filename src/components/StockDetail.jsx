@@ -237,8 +237,10 @@ export default function StockDetail({
   if (!s) return null;
   const starred = watchlist.includes(s.ticker);
   const { price: disp, converted } = convertPrice(s.price, s.exchange, currency, usdToCadRate);
-  const dec    = disp < 10 ? 3 : 2;
-  const chgPos = s.change >= 0;
+  const hasPrice = typeof disp === "number";
+  const hasChg   = typeof s.change === "number";
+  const dec    = hasPrice && disp < 10 ? 3 : 2;
+  const chgPos = hasChg && s.change >= 0;
   const vr     = volRatio(s);
   const ms     = momentumScore(s);
 
@@ -269,10 +271,10 @@ export default function StockDetail({
               </div>
 
               <div className="sd-price-block">
-                <div className="sd-price">{converted && "~"}${fmt(disp, dec)}</div>
+                <div className="sd-price">{hasPrice ? `${converted ? "~" : ""}$${fmt(disp, dec)}` : "—"}</div>
                 <div className="sd-chg-row">
-                  <span className={`sd-chg ${chgPos ? "pos" : "neg"}`}>
-                    {chgPos ? "+" : ""}{fmt(s.change)}%
+                  <span className={`sd-chg ${hasChg ? (chgPos ? "pos" : "neg") : ""}`}>
+                    {hasChg ? `${chgPos ? "+" : ""}${fmt(s.change)}%` : "—"}
                   </span>
                   {converted && <span className="sd-ccy-note">{currency}</span>}
                 </div>
@@ -283,10 +285,10 @@ export default function StockDetail({
           <div className="sd-divider" />
 
           <div className="sd-chart">
-            <div className="sd-chart-label">
-              30-day price
-              {candleData ? <span className="sd-live">live</span> : <span>simulated</span>}
-            </div>
+              <div className="sd-chart-label">
+                30-day price
+                {candleData ? <span className="sd-live">live</span> : <span>unavailable</span>}
+              </div>
             <AreaChart positive={chgPos} prices={candleData ?? null} width={772} height={140} />
           </div>
 
@@ -324,8 +326,8 @@ export default function StockDetail({
               </div>
               <div className="sd-kv">
                 <span className="sd-k">Vol / Avg</span>
-                <span className="sd-v" style={{ color: vr > 1.5 ? "var(--accent)" : "var(--text-1)" }}>
-                  {fmt(vr, 1)}×
+                <span className="sd-v" style={{ color: vr != null && vr > 1.5 ? "var(--accent)" : "var(--text-1)" }}>
+                  {vr != null ? `${fmt(vr, 1)}×` : "—"}
                 </span>
               </div>
               <div className="sd-kv">
