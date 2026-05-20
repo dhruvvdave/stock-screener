@@ -1,32 +1,6 @@
 export const SECTORS = ["Technology", "Energy", "Finance", "Healthcare", "Materials", "Industrials", "Consumer", "Utilities"];
 
-export const STOCKS = [
-  { ticker: "SHOP", name: "Shopify Inc.", exchange: "TSX", sector: "Technology" },
-  { ticker: "CNQ", name: "Canadian Natural Resources", exchange: "TSX", sector: "Energy" },
-  { ticker: "RY", name: "Royal Bank of Canada", exchange: "TSX", sector: "Finance" },
-  { ticker: "TD", name: "Toronto-Dominion Bank", exchange: "TSX", sector: "Finance" },
-  { ticker: "ATD", name: "Alimentation Couche-Tard", exchange: "TSX", sector: "Consumer" },
-  { ticker: "SU", name: "Suncor Energy Inc.", exchange: "TSX", sector: "Energy" },
-  { ticker: "BCE", name: "BCE Inc.", exchange: "TSX", sector: "Utilities" },
-  { ticker: "ENB", name: "Enbridge Inc.", exchange: "TSX", sector: "Energy" },
-  { ticker: "AAPL", name: "Apple Inc.", exchange: "NASDAQ", sector: "Technology" },
-  { ticker: "NVDA", name: "NVIDIA Corporation", exchange: "NASDAQ", sector: "Technology" },
-  { ticker: "MSFT", name: "Microsoft Corporation", exchange: "NASDAQ", sector: "Technology" },
-  { ticker: "JPM", name: "JPMorgan Chase & Co.", exchange: "NYSE", sector: "Finance" },
-  { ticker: "XOM", name: "Exxon Mobil Corporation", exchange: "NYSE", sector: "Energy" },
-  { ticker: "META", name: "Meta Platforms Inc.", exchange: "NASDAQ", sector: "Technology" },
-  { ticker: "AMZN", name: "Amazon.com Inc.", exchange: "NASDAQ", sector: "Technology" },
-  { ticker: "LLY", name: "Eli Lilly and Company", exchange: "NYSE", sector: "Healthcare" },
-  { ticker: "JNJ", name: "Johnson & Johnson", exchange: "NYSE", sector: "Healthcare" },
-  { ticker: "NTR", name: "Nutrien Ltd.", exchange: "TSX", sector: "Materials" },
-  { ticker: "ABX", name: "Barrick Gold Corporation", exchange: "TSX", sector: "Materials" },
-  { ticker: "CAT", name: "Caterpillar Inc.", exchange: "NYSE", sector: "Industrials" },
-  { ticker: "CP", name: "Canadian Pacific Kansas City", exchange: "TSX", sector: "Industrials" },
-  { ticker: "GOOG", name: "Alphabet Inc.", exchange: "NASDAQ", sector: "Technology" },
-  { ticker: "WMT", name: "Walmart Inc.", exchange: "NYSE", sector: "Consumer" },
-  { ticker: "GSI.V", name: "Gatekeeper Systems Inc.", exchange: "TSX-V", sector: "Technology" },
-  { ticker: "UEC", name: "Uranium Energy Corp.", exchange: "NYSE", sector: "Energy" },
-];
+export const STOCKS = [];
 
 export function fmt(n, decimals = 2) {
   if (n == null) return "—";

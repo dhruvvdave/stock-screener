@@ -1,11 +1,10 @@
-const FINNHUB_SYMBOLS = {
-  SHOP: "TSX:SHOP", CNQ: "TSX:CNQ", RY: "TSX:RY", TD: "TSX:TD",
-  ATD: "TSX:ATD", SU: "TSX:SU", BCE: "TSX:BCE", ENB: "TSX:ENB",
-  NTR: "TSX:NTR", ABX: "TSX:ABX", CP: "TSX:CP", "GSI.V": "TSXV:GSI",
-};
+function isInvalidQuote(data) {
+  if (!data || typeof data !== "object") return true;
 
-function toFinnhubSymbol(symbol) {
-  return FINNHUB_SYMBOLS[symbol] ?? symbol;
+  const numericFields = ["c", "d", "dp", "h", "l", "o", "pc", "t"];
+  if (numericFields.some((field) => typeof data[field] !== "number")) return true;
+
+  return data.t === 0 || (data.c === 0 && data.pc === 0 && data.h === 0 && data.l === 0 && data.o === 0);
 }
 
 export default async function handler(req, res) {
@@ -14,30 +13,35 @@ export default async function handler(req, res) {
   const key = globalThis.process?.env?.FINNHUB_KEY;
   if (!key) return res.status(500).json({ error: "Missing FINNHUB_KEY" });
 
-  const rawSymbol = (req.query.symbol ?? "").trim().toUpperCase();
-  if (!rawSymbol) return res.status(400).json({ error: "Missing symbol" });
-
-  const symbol = toFinnhubSymbol(rawSymbol);
+  const symbol = (req.query.symbol ?? "").trim().toUpperCase();
+  if (!symbol) return res.status(400).json({ error: "Missing symbol" });
 
   try {
-    const r = await fetch(
+    const response = await fetch(
       `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${key}`
     );
 
-    if (!r.ok) {
-      return res.status(502).json({ error: `Finnhub returned ${r.status}` });
+    if (!response.ok) {
+      return res.status(502).json({ error: `Finnhub returned ${response.status}` });
     }
 
-    const d = await r.json();
-    if (typeof d?.c !== "number") {
-      return res.status(502).json({ error: "Invalid Finnhub quote response" });
+    const quote = await response.json();
+    if (isInvalidQuote(quote)) {
+      return res.status(404).json({ error: `No quote found for symbol ${symbol}` });
     }
 
     return res.status(200).json({
-      price: d.c,
-      change: typeof d.dp === "number" ? +d.dp.toFixed(2) : null,
+      symbol,
+      price: quote.c,
+      change: quote.d,
+      changePercent: quote.dp,
+      high: quote.h,
+      low: quote.l,
+      open: quote.o,
+      previousClose: quote.pc,
+      timestamp: quote.t,
     });
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : "Internal server error" });
   }
 }
