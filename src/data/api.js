@@ -1,5 +1,5 @@
-// Finnhub symbol map — Canadian stocks use .TO suffix on Finnhub
-export const FINNHUB_SYMBOLS = {
+// Canadian stocks use .TO suffix on both Yahoo Finance and Finnhub
+export const EXCHANGE_SYMBOLS = {
   SHOP:    "SHOP.TO", CNQ:  "CNQ.TO",  RY:   "RY.TO",  TD:  "TD.TO",
   ATD:     "ATD.TO",  SU:   "SU.TO",   BCE:  "BCE.TO",  ENB: "ENB.TO",
   NTR:     "NTR.TO",  ABX:  "ABX.TO",  CP:   "CP.TO",
@@ -22,29 +22,25 @@ export async function fetchExchangeRate() {
   }
 }
 
-// ── Finnhub quotes via /api/quotes proxy ───────────────────────────────────
+// ── Yahoo Finance quotes via /api/quotes proxy (no key needed) ────────────
 
 export async function fetchAllQuotes(tickers) {
-  const symbols = tickers.map(t => FINNHUB_SYMBOLS[t] ?? t);
-  try {
-    const r = await fetch(`/api/quotes?symbols=${symbols.join(",")}`);
-    if (!r.ok) return new Map();
-    const data = await r.json();
-    const result = new Map();
-    tickers.forEach(t => {
-      const sym = FINNHUB_SYMBOLS[t] ?? t;
-      if (data[sym]) result.set(t, data[sym]);
-    });
-    return result;
-  } catch {
-    return new Map();
-  }
+  const symbols = tickers.map(t => EXCHANGE_SYMBOLS[t] ?? t);
+  const r = await fetch(`/api/quotes?symbols=${symbols.join(",")}`);
+  if (!r.ok) throw new Error(`quotes API ${r.status}`);
+  const data = await r.json();
+  const result = new Map();
+  tickers.forEach(t => {
+    const sym = EXCHANGE_SYMBOLS[t] ?? t;
+    if (data[sym]) result.set(t, data[sym]);
+  });
+  return result;
 }
 
-// ── Candle / historical data via /api/candle proxy ────────────────────────
+// ── Yahoo Finance candle data via /api/candle proxy (no key needed) ───────
 
 export async function fetchCandleData(ticker) {
-  const symbol = FINNHUB_SYMBOLS[ticker] ?? ticker;
+  const symbol = EXCHANGE_SYMBOLS[ticker] ?? ticker;
   try {
     const r = await fetch(`/api/candle?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
@@ -55,10 +51,10 @@ export async function fetchCandleData(ticker) {
   }
 }
 
-// ── Analyst data via /api/analyst proxy ───────────────────────────────────
+// ── Analyst data via /api/analyst proxy (Finnhub, optional) ───────────────
 
 export async function fetchAnalystData(ticker) {
-  const symbol = FINNHUB_SYMBOLS[ticker] ?? ticker;
+  const symbol = EXCHANGE_SYMBOLS[ticker] ?? ticker;
   try {
     const r = await fetch(`/api/analyst?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
@@ -68,10 +64,10 @@ export async function fetchAnalystData(ticker) {
   }
 }
 
-// ── News sentiment via /api/sentiment proxy ───────────────────────────────
+// ── News sentiment via /api/sentiment proxy (Finnhub, optional) ───────────
 
 export async function fetchNewsSentiment(ticker) {
-  const symbol = FINNHUB_SYMBOLS[ticker] ?? ticker;
+  const symbol = EXCHANGE_SYMBOLS[ticker] ?? ticker;
   try {
     const r = await fetch(`/api/sentiment?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
@@ -103,9 +99,9 @@ export function filterBoundToNative(bound, exchange, displayCurrency, usdToCad) 
   return n;
 }
 
-// ── AI analysis via /api/analyze proxy ────────────────────────────────────
+// ── AI analysis via /api/analyze proxy (user supplies OpenAI key) ─────────
 
-export async function generateAIAnalysis(stock, analystData, sentiment) {
+export async function generateAIAnalysis(stock, analystData, sentiment, openaiKey) {
   const a    = analystData ?? {};
   const sent = sentiment ?? {};
 
@@ -146,10 +142,11 @@ forecast30d should be realistic price levels in the stock's native currency base
   const res = await fetch("/api/analyze", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ prompt, openaiKey }),
   });
 
   const d = await res.json();
+  if (d.error === "no_key") throw new Error("no_key");
   if (d.error) throw new Error(d.error);
 
   const text = d.text ?? "";

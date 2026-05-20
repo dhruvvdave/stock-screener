@@ -37,6 +37,7 @@ export default function StockScreener() {
   const [usdToCad,       setUsdToCad]      = useState(1.36);
   const [liveQuotes,     setLiveQuotes]    = useState({});
   const [quotesLoading,  setQuotesLoading] = useState(false);
+  const [quotesLive,     setQuotesLive]    = useState(false);
   const [candleCache,    setCandleCache]   = useState({});   // { [ticker]: number[] | null }
   const [suppCache,      setSuppCache]     = useState({});   // { [ticker]: { analyst, sentiment } }
 
@@ -103,7 +104,9 @@ export default function StockScreener() {
         const obj = {};
         map.forEach((v, k) => { obj[k] = v; });
         setLiveQuotes(obj);
+        setQuotesLive(map.size > 0);
       })
+      .catch(() => { setQuotesLive(false); })
       .finally(() => setQuotesLoading(false));
   }, []);
 
@@ -192,6 +195,7 @@ export default function StockScreener() {
           onFiltersOpen={() => setFiltersOpen(true)}
           activeFilterCount={activeFilterCount}
           quotesLoading={quotesLoading}
+          quotesLive={quotesLive}
         />
 
         <div className="main">

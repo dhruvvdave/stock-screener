@@ -68,8 +68,10 @@ const STYLE = `
     border-radius: 50%;
     background: var(--pos);
     flex-shrink: 0;
+    transition: background 0.3s;
   }
   .hdr-dot.loading { animation: dot-pulse 1s ease-in-out infinite; }
+  .hdr-dot.offline { background: var(--text-3); }
   @keyframes dot-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
   .hdr-clock {
     font-family: var(--font-mono);
@@ -123,7 +125,7 @@ const STYLE = `
 
 export default function Header({
   clock, watchlistCount, currency, onCurrencyToggle,
-  quotesLoading, onFiltersOpen, activeFilterCount,
+  quotesLoading, quotesLive, onFiltersOpen, activeFilterCount,
 }) {
   return (
     <>
@@ -163,7 +165,7 @@ export default function Header({
           )}
 
           <div className="hdr-status">
-            <div className={`hdr-dot ${quotesLoading ? "loading" : ""}`} />
+            <div className={`hdr-dot${quotesLoading ? " loading" : !quotesLive ? " offline" : ""}`} />
             <span className="hdr-clock">{clock}</span>
           </div>
         </div>
