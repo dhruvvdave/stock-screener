@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
 
   const key = process.env.FINNHUB_KEY || process.env.FINNHUB_API_KEY;
-  if (!key) return res.status(503).json({ error: "Service not configured" });
+  if (!key) return res.json({ buy: 0, hold: 0, sell: 0, total: 0, meanTarget: null, highTarget: null, lowTarget: null });
 
   const { symbol } = req.query;
   if (!symbol) return res.status(400).json({ error: "Missing symbol" });

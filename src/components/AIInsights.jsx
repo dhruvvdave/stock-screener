@@ -19,10 +19,6 @@ const STYLE = `
     letter-spacing: 0.07em;
     text-transform: uppercase;
   }
-  .ai-source {
-    font-size: 10px;
-    color: var(--text-3);
-  }
   .ai-gen-btn {
     font-family: var(--font-ui);
     font-size: 11px;
@@ -38,9 +34,56 @@ const STYLE = `
   .ai-gen-btn:hover:not(:disabled) { opacity: 0.7; }
   .ai-gen-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-  .ai-prompt { font-size: 12px; color: var(--text-3); line-height: 1.55; }
-  .ai-prompt a { color: var(--accent); text-decoration: none; }
-  .ai-prompt a:hover { text-decoration: underline; }
+  /* API key input */
+  .ai-key-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .ai-key-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border-2);
+    color: var(--text-2);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 4px 0;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .ai-key-input::placeholder { color: var(--text-3); }
+  .ai-key-input:focus { border-color: var(--accent); }
+  .ai-key-save {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-3);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: color 0.1s;
+    white-space: nowrap;
+  }
+  .ai-key-save:hover { color: var(--text-1); }
+  .ai-key-clear {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-3);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: color 0.1s;
+  }
+  .ai-key-clear:hover { color: var(--neg); }
+  .ai-key-hint {
+    font-size: 10px;
+    color: var(--text-3);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
 
   .ai-signal-row {
     display: flex;
@@ -164,29 +207,53 @@ const SIG_CLS   = { buy: "sig-buy", sell: "sig-sell", hold: "sig-hold", watch: "
 const SIG_LABEL = { buy: "BUY", sell: "SELL", hold: "HOLD", watch: "WATCH" };
 const SENT_CLS  = { bullish: "sent-bullish", bearish: "sent-bearish", neutral: "sent-neutral" };
 
-export default function AIInsights({ stock, analystData, sentiment }) {
-  const [status, setStatus]   = useState("idle");  // idle | loading | done | error
-  const [result, setResult]   = useState(null);
-  const [errMsg, setErrMsg]   = useState("");
+const LS_KEY = "mktscan_openai_key";
 
-  // Reset when stock changes
+export default function AIInsights({ stock, analystData, sentiment }) {
+  const [status,   setStatus]   = useState("idle");
+  const [result,   setResult]   = useState(null);
+  const [errMsg,   setErrMsg]   = useState("");
+  const [savedKey, setSavedKey] = useState(() => localStorage.getItem(LS_KEY) ?? "");
+  const [keyInput, setKeyInput] = useState("");
+  const [showInput, setShowInput] = useState(false);
+
   useEffect(() => {
     setStatus("idle");
     setResult(null);
     setErrMsg("");
   }, [stock?.ticker]);
 
+  const saveKey = () => {
+    const k = keyInput.trim();
+    localStorage.setItem(LS_KEY, k);
+    setSavedKey(k);
+    setKeyInput("");
+    setShowInput(false);
+  };
+
+  const clearKey = () => {
+    localStorage.removeItem(LS_KEY);
+    setSavedKey("");
+    setKeyInput("");
+  };
+
   const generate = async () => {
     setStatus("loading");
     setResult(null);
     setErrMsg("");
     try {
-      const r = await generateAIAnalysis(stock, analystData, sentiment);
+      const r = await generateAIAnalysis(stock, analystData, sentiment, savedKey || undefined);
       setResult(r);
       setStatus("done");
     } catch (e) {
-      setErrMsg(e.message ?? "Analysis failed");
-      setStatus("error");
+      if (e.message === "no_key") {
+        setShowInput(true);
+        setErrMsg("Enter your OpenAI API key below to enable AI analysis.");
+        setStatus("error");
+      } else {
+        setErrMsg(e.message ?? "Analysis failed");
+        setStatus("error");
+      }
     }
   };
 
@@ -202,6 +269,47 @@ export default function AIInsights({ stock, analystData, sentiment }) {
             {status === "loading" ? "Analyzing…" : hasResult ? "Regenerate" : "Generate"}
           </button>
         </div>
+
+        {/* OpenAI key management */}
+        {savedKey ? (
+          <div className="ai-key-row">
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-3)", flex: 1 }}>
+              OpenAI key ···{savedKey.slice(-4)}
+            </span>
+            <button className="ai-key-clear" onClick={clearKey} title="Remove key">✕</button>
+          </div>
+        ) : (
+          <>
+            {!showInput ? (
+              <p className="ai-key-hint">
+                <span
+                  style={{ cursor: "pointer", color: "var(--text-3)", textDecoration: "underline", textDecorationStyle: "dotted" }}
+                  onClick={() => setShowInput(true)}
+                >
+                  Add OpenAI key
+                </span>
+                {" "}to enable AI analysis. Stored locally in your browser.
+              </p>
+            ) : (
+              <>
+                <div className="ai-key-row">
+                  <input
+                    className="ai-key-input"
+                    type="password"
+                    placeholder="sk-..."
+                    value={keyInput}
+                    onChange={e => setKeyInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && saveKey()}
+                    autoFocus
+                  />
+                  <button className="ai-key-save" onClick={saveKey}>Save</button>
+                  <button className="ai-key-clear" onClick={() => setShowInput(false)}>✕</button>
+                </div>
+                <p className="ai-key-hint">Key is stored only in your browser. Never sent anywhere except OpenAI.</p>
+              </>
+            )}
+          </>
+        )}
 
         {status === "loading" && (
           <>
@@ -221,7 +329,7 @@ export default function AIInsights({ stock, analystData, sentiment }) {
         {hasResult && (() => {
           const { summary, bulls = [], bears = [], forecast30d, sentiment: sent, signal } = result;
           const { low, mid, high } = forecast30d ?? {};
-          const range = (high != null && low != null) ? (high - low) : null;
+          const range  = (high != null && low != null) ? (high - low) : null;
           const midPct = range ? Math.min(100, Math.max(0, ((mid - low) / range) * 100)) : 50;
           const curPct = range ? Math.min(100, Math.max(0, ((stock.price - low) / range) * 100)) : 50;
 
