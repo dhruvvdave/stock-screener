@@ -10,6 +10,13 @@ export const YAHOO_SYMBOLS = {
   META: "META", AMZN: "AMZN", GOOG: "GOOG",
 };
 
+// Convert bare ticker + exchange to Yahoo Finance symbol
+export function toYahooSymbol(ticker, exchange) {
+  if (YAHOO_SYMBOLS[ticker]) return YAHOO_SYMBOLS[ticker];
+  if (exchange === "TSX" || exchange === "TSX-V") return ticker + ".TO";
+  return ticker;
+}
+
 // Finnhub uses TSX: prefix for Canadian stocks; US tickers pass through unchanged
 const FINNHUB_SYMBOLS = {
   SHOP: "TSX:SHOP", CNQ:  "TSX:CNQ", RY:  "TSX:RY",  TD:  "TSX:TD",
@@ -17,6 +24,13 @@ const FINNHUB_SYMBOLS = {
   NTR:  "TSX:NTR",  ABX:  "TSX:ABX", CP:  "TSX:CP",
   "GSI.V": "TSXV:GSI",
 };
+
+function toFinnhubSymbol(ticker, exchange) {
+  if (FINNHUB_SYMBOLS[ticker]) return FINNHUB_SYMBOLS[ticker];
+  if (exchange === "TSX")   return `TSX:${ticker}`;
+  if (exchange === "TSX-V") return `TSXV:${ticker}`;
+  return ticker;
+}
 
 // ── Exchange rate (no API key needed) ──────────────────────────────────────
 
@@ -31,42 +45,120 @@ export async function fetchExchangeRate() {
 }
 
 // ── Finnhub quotes via /api/stock proxy (FINNHUB_KEY) ─────────────────────
+// Accepts array of tickers (strings) or stock objects { ticker, exchange }
 
-export async function fetchAllQuotes(tickers) {
+export async function fetchAllQuotes(stocksOrTickers) {
   const result = new Map();
 
-  await Promise.all(tickers.map(async (ticker) => {
-    const symbol = FINNHUB_SYMBOLS[ticker] ?? ticker;
+  await Promise.all(stocksOrTickers.map(async (item) => {
+    const ticker   = typeof item === "string" ? item : item.ticker;
+    const exchange = typeof item === "string" ? ""   : (item.exchange ?? "");
+    const symbol   = toFinnhubSymbol(ticker, exchange);
     try {
       const r = await fetch(`/api/stock?symbol=${encodeURIComponent(symbol)}`);
       if (!r.ok) return;
       const data = await r.json();
       if (typeof data?.price === "number") {
         result.set(ticker, {
-          price: data.price,
+          price:  data.price,
           change: typeof data.change === "number" ? data.change : null,
         });
       }
     } catch {
-      // skip this ticker and continue resolving other quotes
+      // skip and continue
     }
   }));
 
   return result;
 }
 
+// ── Yahoo Finance batch supplementary data via /api/quotes proxy ──────────
+// Accepts array of stock objects { ticker, exchange } to map to Yahoo symbols
+
+export async function fetchSupplementaryQuotes(stocks) {
+  if (!stocks?.length) return {};
+
+  const symbolToTicker = {};
+  const symbols = stocks.map(s => {
+    const ys = toYahooSymbol(s.ticker, s.exchange);
+    symbolToTicker[ys] = s.ticker;
+    return ys;
+  });
+
+  try {
+    const r = await fetch(`/api/quotes?symbols=${symbols.join(",")}`);
+    if (!r.ok) return {};
+    const raw = await r.json();
+    const result = {};
+    for (const [sym, data] of Object.entries(raw)) {
+      const ticker = symbolToTicker[sym] ?? sym;
+      result[ticker] = data;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 // ── Yahoo Finance candle data via /api/candle proxy (no key needed) ───────
 
-export async function fetchCandleData(ticker) {
-  const symbol = YAHOO_SYMBOLS[ticker] ?? ticker;
+export async function fetchCandleData(ticker, exchange = "", range = "1mo") {
+  const symbol = YAHOO_SYMBOLS[ticker] ?? toYahooSymbol(ticker, exchange);
   try {
-    const r = await fetch(`/api/candle?symbol=${encodeURIComponent(symbol)}`);
+    const r = await fetch(`/api/candle?symbol=${encodeURIComponent(symbol)}&range=${range}`);
     if (!r.ok) return null;
     const d = await r.json();
     return d.prices ?? null;
   } catch {
     return null;
   }
+}
+
+// ── Finnhub search via /api/search proxy ──────────────────────────────────
+
+export async function fetchSearchResults(query) {
+  if (!query || query.length < 2) return [];
+  try {
+    const r = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    if (!r.ok) return [];
+    const d = await r.json();
+    return d.results ?? [];
+  } catch {
+    return [];
+  }
+}
+
+// ── Technical indicators computed from price history ─────────────────────
+
+export function calculateTechnicals(prices) {
+  if (!Array.isArray(prices) || prices.length < 15) return { rsi: null, ma50: null, ma200: null };
+  const n = prices.length;
+
+  // Simple moving averages
+  const ma50  = n >= 50  ? +(prices.slice(-50).reduce((a, b)  => a + b, 0) / 50).toFixed(2)  : null;
+  const ma200 = n >= 200 ? +(prices.slice(-200).reduce((a, b) => a + b, 0) / 200).toFixed(2) : null;
+
+  // RSI(14) — Wilder's smoothing method
+  const changes = [];
+  for (let i = 1; i < n; i++) changes.push(prices[i] - prices[i - 1]);
+
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 0; i < 14; i++) {
+    if (changes[i] > 0) avgGain += changes[i];
+    else avgLoss += Math.abs(changes[i]);
+  }
+  avgGain /= 14;
+  avgLoss /= 14;
+
+  for (let i = 14; i < changes.length; i++) {
+    const gain = changes[i] > 0 ? changes[i] : 0;
+    const loss = changes[i] < 0 ? Math.abs(changes[i]) : 0;
+    avgGain = (avgGain * 13 + gain) / 14;
+    avgLoss = (avgLoss * 13 + loss) / 14;
+  }
+
+  const rsi = avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(1);
+  return { rsi, ma50, ma200 };
 }
 
 // ── Analyst data via /api/analyst proxy (Finnhub, optional) ───────────────

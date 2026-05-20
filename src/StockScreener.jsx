@@ -8,8 +8,8 @@ import { useLocalStorage } from "./hooks/useLocalStorage";
 
 import { STOCKS } from "./data/stocks";
 import {
-  fetchExchangeRate, fetchAllQuotes, fetchCandleData,
-  fetchAnalystData, fetchNewsSentiment,
+  fetchExchangeRate, fetchAllQuotes, fetchSupplementaryQuotes,
+  fetchCandleData, fetchAnalystData, fetchNewsSentiment,
 } from "./data/api";
 
 const STYLE = `
@@ -21,8 +21,9 @@ export default function StockScreener() {
   const [clock, setClock] = useState("");
 
   // Persisted preferences
-  const [watchlist, setWatchlist] = useLocalStorage("mktscan_watchlist", []);
-  const [currency,  setCurrency]  = useLocalStorage("mktscan_currency",  "USD");
+  const [watchlist,     setWatchlist]     = useLocalStorage("mktscan_watchlist", []);
+  const [currency,      setCurrency]      = useLocalStorage("mktscan_currency",  "USD");
+  const [dynamicStocks, setDynamicStocks] = useLocalStorage("mktscan_dynamic",   []);
 
   // Live data
   const [usdToCad,      setUsdToCad]      = useState(1.36);
@@ -35,10 +36,12 @@ export default function StockScreener() {
   // UI state
   const [selected, setSelected] = useState(null);
 
-  const stocksWithLive = useMemo(() => STOCKS.map(s => ({
+  const allStocks = useMemo(() => [...STOCKS, ...dynamicStocks], [dynamicStocks]);
+
+  const stocksWithLive = useMemo(() => allStocks.map(s => ({
     ...s,
     ...(liveQuotes[s.ticker] ?? {}),
-  })), [liveQuotes]);
+  })), [allStocks, liveQuotes]);
 
   // Clock
   useEffect(() => {
@@ -60,19 +63,26 @@ export default function StockScreener() {
     fetchExchangeRate().then(setUsdToCad);
   }, []);
 
-  // Live quotes
+  // Live quotes — Finnhub prices + Yahoo supplementary data
   useEffect(() => {
     setQuotesLoading(true);
-    fetchAllQuotes(STOCKS.map(s => s.ticker))
-      .then(map => {
+
+    Promise.all([
+      fetchAllQuotes(allStocks),
+      fetchSupplementaryQuotes(allStocks),
+    ])
+      .then(([quotesMap, suppData]) => {
         const obj = {};
-        map.forEach((v, k) => { obj[k] = v; });
+        // Supplementary data (Yahoo) as base — includes pe, pb, beta, vol, mktCap, etc.
+        for (const [t, v] of Object.entries(suppData)) obj[t] = { ...v };
+        // Finnhub price/change wins (more real-time)
+        quotesMap.forEach((v, k) => { obj[k] = { ...(obj[k] ?? {}), ...v }; });
         setLiveQuotes(obj);
-        setQuotesLive(map.size > 0);
+        setQuotesLive(quotesMap.size > 0);
       })
       .catch(() => setQuotesLive(false))
       .finally(() => setQuotesLoading(false));
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lazy candle + supplementary when detail opens
   useEffect(() => {
@@ -80,7 +90,8 @@ export default function StockScreener() {
     const t = selected.ticker;
     if (candleCache[t] === undefined) {
       setCandleCache(c => ({ ...c, [t]: null }));
-      fetchCandleData(t).then(data => setCandleCache(c => ({ ...c, [t]: data })));
+      fetchCandleData(t, selected.exchange, "1y")
+        .then(data => setCandleCache(c => ({ ...c, [t]: data })));
     }
     if (!suppCache[t]) {
       Promise.all([fetchAnalystData(t), fetchNewsSentiment(t)]).then(([analyst, sentiment]) => {
@@ -97,6 +108,36 @@ export default function StockScreener() {
     const live = stocksWithLive.find(s => s.ticker === stock.ticker) ?? stock;
     setSelected(live);
   }, [stocksWithLive]);
+
+  // Add a dynamically searched stock to the list and immediately fetch its data
+  const handleAddStock = useCallback((result) => {
+    const newStock = {
+      ticker:   result.symbol,
+      name:     result.name,
+      exchange: result.exchange,
+      sector:   "—",
+    };
+
+    setDynamicStocks(prev => {
+      if (prev.some(s => s.ticker === newStock.ticker)) return prev;
+      return [...prev, newStock];
+    });
+
+    // Fetch quotes for the new stock immediately
+    Promise.all([
+      fetchAllQuotes([newStock]),
+      fetchSupplementaryQuotes([newStock]),
+    ]).then(([quotesMap, suppData]) => {
+      setLiveQuotes(prev => {
+        const merged = { ...prev };
+        for (const [t, v] of Object.entries(suppData)) merged[t] = { ...(merged[t] ?? {}), ...v };
+        quotesMap.forEach((v, k) => { merged[k] = { ...(merged[k] ?? {}), ...v }; });
+        return merged;
+      });
+    });
+
+    setSelected(newStock);
+  }, [setDynamicStocks]);
 
   return (
     <>
@@ -128,6 +169,7 @@ export default function StockScreener() {
               watchlist={watchlist}
               onStarClick={handleStarClick}
               onSelect={handleSelect}
+              onAddStock={handleAddStock}
               currency={currency}
               usdToCadRate={usdToCad}
               quotesLoading={quotesLoading}

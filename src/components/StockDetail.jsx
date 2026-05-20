@@ -2,7 +2,7 @@ import AreaChart    from "./AreaChart";
 import MomentumDots from "./MomentumDots";
 import AIInsights   from "./AIInsights";
 import { fmt, fmtLarge, volRatio, momentumScore } from "../data/stocks";
-import { convertPrice } from "../data/api";
+import { convertPrice, calculateTechnicals } from "../data/api";
 
 const STYLE = `
   .sd-page {
@@ -114,6 +114,39 @@ const STYLE = `
     color: var(--text-3);
   }
 
+  /* 52-week range bar */
+  .sd-52w {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 0 2px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .sd-52w-track {
+    flex: 1;
+    height: 2px;
+    background: var(--surface-3, rgba(255,255,255,0.08));
+    border-radius: 1px;
+    position: relative;
+  }
+  .sd-52w-dot {
+    position: absolute;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-1);
+    transform: translate(-50%, -50%);
+  }
+  .sd-52w-label {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
   .sd-divider { height: 1px; background: var(--border); }
 
   .sd-chart { padding: 20px 0; }
@@ -190,6 +223,14 @@ const STYLE = `
   }
 `;
 
+function fmtEarnings(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts * 1000);
+  const diff = d.getTime() - Date.now();
+  if (diff < -30 * 86400000 || diff > 180 * 86400000) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 function AnalystSection({ analyst, sentiment }) {
   if (!analyst?.total) return null;
   const { buy, hold, sell, total, meanTarget, highTarget, lowTarget } = analyst;
@@ -244,6 +285,18 @@ export default function StockDetail({
   const vr     = volRatio(s);
   const ms     = momentumScore(s);
 
+  // 52-week range in display currency
+  const { price: disp52Low }  = convertPrice(s.low52w,  s.exchange, currency, usdToCadRate);
+  const { price: disp52High } = convertPrice(s.high52w, s.exchange, currency, usdToCadRate);
+  const has52w = disp52Low != null && disp52High != null && disp52High > disp52Low;
+  const pct52  = has52w && hasPrice
+    ? Math.min(100, Math.max(0, (disp - disp52Low) / (disp52High - disp52Low) * 100))
+    : null;
+
+  // Technical indicators from 1-year price history
+  const techs = calculateTechnicals(candleData);
+  const chartLabel = candleData && candleData.length > 60 ? "1-year price" : "30-day price";
+
   return (
     <>
       <style>{STYLE}</style>
@@ -280,15 +333,29 @@ export default function StockDetail({
                 </div>
               </div>
             </div>
+
+            {/* 52-week range bar */}
+            {has52w && (
+              <div className="sd-52w">
+                <span>${fmt(disp52Low, dec)}</span>
+                <div className="sd-52w-track">
+                  {pct52 !== null && (
+                    <div className="sd-52w-dot" style={{ left: `${pct52.toFixed(1)}%` }} />
+                  )}
+                </div>
+                <span>${fmt(disp52High, dec)}</span>
+                <span className="sd-52w-label">52W</span>
+              </div>
+            )}
           </div>
 
           <div className="sd-divider" />
 
           <div className="sd-chart">
-              <div className="sd-chart-label">
-                30-day price
-                {candleData ? <span className="sd-live">live</span> : <span>unavailable</span>}
-              </div>
+            <div className="sd-chart-label">
+              {chartLabel}
+              {candleData ? <span className="sd-live">live</span> : <span>unavailable</span>}
+            </div>
             <AreaChart positive={chgPos} prices={candleData ?? null} width={772} height={140} />
           </div>
 
@@ -320,7 +387,7 @@ export default function StockDetail({
               </div>
               <div className="sd-kv">
                 <span className="sd-k">Rev Growth</span>
-                <span className="sd-v" style={{ color: s.revGrowth > 0 ? "var(--pos)" : "var(--neg)" }}>
+                <span className="sd-v" style={{ color: s.revGrowth > 0 ? "var(--pos)" : s.revGrowth != null ? "var(--neg)" : "var(--text-1)" }}>
                   {s.revGrowth != null ? (s.revGrowth > 0 ? "+" : "") + s.revGrowth + "%" : "—"}
                 </span>
               </div>
@@ -336,8 +403,76 @@ export default function StockDetail({
                   <MomentumDots score={ms} size={7} />
                 </span>
               </div>
+              <div className="sd-kv">
+                <span className="sd-k">Div Yield</span>
+                <span className="sd-v">
+                  {s.dividendYield != null ? `${fmt(s.dividendYield, 2)}%` : "—"}
+                </span>
+              </div>
+              <div className="sd-kv">
+                <span className="sd-k">Earnings</span>
+                <span className="sd-v" style={{ fontSize: 13 }}>
+                  {fmtEarnings(s.earningsDate)}
+                </span>
+              </div>
             </div>
           </div>
+
+          {/* Technical indicators */}
+          {(techs.rsi != null || techs.ma50 != null || techs.ma200 != null) && (
+            <>
+              <div className="sd-divider" />
+              <div className="sd-analyst">
+                <div className="sd-section-label">Technicals</div>
+                <div className="sd-metrics-grid">
+                  {techs.rsi != null && (
+                    <div className="sd-kv">
+                      <span className="sd-k">RSI (14)</span>
+                      <span className="sd-v" style={{
+                        color: techs.rsi < 30 ? "var(--pos)"
+                             : techs.rsi > 70 ? "var(--neg)"
+                             : "var(--text-1)",
+                      }}>
+                        {techs.rsi}
+                        {techs.rsi < 30 ? " OS" : techs.rsi > 70 ? " OB" : ""}
+                      </span>
+                    </div>
+                  )}
+                  {techs.ma50 != null && hasPrice && (() => {
+                    const pct = ((disp - techs.ma50) / techs.ma50 * 100);
+                    return (
+                      <div className="sd-kv">
+                        <span className="sd-k">vs MA50</span>
+                        <span className="sd-v" style={{ color: pct >= 0 ? "var(--pos)" : "var(--neg)" }}>
+                          {pct >= 0 ? "▲ " : "▼ "}{fmt(Math.abs(pct), 1)}%
+                        </span>
+                      </div>
+                    );
+                  })()}
+                  {techs.ma200 != null && hasPrice && (() => {
+                    const pct = ((disp - techs.ma200) / techs.ma200 * 100);
+                    const cross = techs.ma50 != null
+                      ? (techs.ma50 > techs.ma200 ? " ✦" : " ✕")
+                      : "";
+                    return (
+                      <div className="sd-kv">
+                        <span className="sd-k">vs MA200</span>
+                        <span className="sd-v" style={{ color: pct >= 0 ? "var(--pos)" : "var(--neg)" }}>
+                          {pct >= 0 ? "▲ " : "▼ "}{fmt(Math.abs(pct), 1)}%{cross}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                  {techs.ma50 != null && (
+                    <div className="sd-kv">
+                      <span className="sd-k">MA50</span>
+                      <span className="sd-v">${fmt(techs.ma50, 2)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
           <AnalystSection
             analyst={supplementary?.analyst ?? null}

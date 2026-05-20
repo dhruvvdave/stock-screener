@@ -13,6 +13,13 @@ export default async function handler(req, res) {
     "trailingPE",
     "priceToBook",
     "beta",
+    "fiftyTwoWeekHigh",
+    "fiftyTwoWeekLow",
+    "trailingAnnualDividendYield",
+    "earningsTimestampStart",
+    "earningsTimestamp",
+    "earningsGrowth",
+    "revenueGrowth",
   ].join(",");
 
   try {
@@ -44,6 +51,16 @@ export default async function handler(req, res) {
           ...(q.trailingPE != null && q.trailingPE > 0 && { pe: +q.trailingPE.toFixed(1) }),
           ...(q.priceToBook           != null && { pb:     +q.priceToBook.toFixed(2) }),
           ...(q.beta                  != null && { beta:   +q.beta.toFixed(2) }),
+          ...(q.fiftyTwoWeekHigh      != null && { high52w: +q.fiftyTwoWeekHigh.toFixed(2) }),
+          ...(q.fiftyTwoWeekLow       != null && { low52w:  +q.fiftyTwoWeekLow.toFixed(2) }),
+          ...(q.trailingAnnualDividendYield != null && q.trailingAnnualDividendYield > 0 && {
+            dividendYield: +(q.trailingAnnualDividendYield * 100).toFixed(2),
+          }),
+          ...((q.earningsTimestampStart ?? q.earningsTimestamp) != null && {
+            earningsDate: q.earningsTimestampStart ?? q.earningsTimestamp,
+          }),
+          ...(q.earningsGrowth != null && { epsGrowth: +(q.earningsGrowth  * 100).toFixed(1) }),
+          ...(q.revenueGrowth  != null && { revGrowth: +(q.revenueGrowth   * 100).toFixed(1) }),
         };
       }
     });

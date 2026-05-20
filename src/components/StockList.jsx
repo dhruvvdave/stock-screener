@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { fmt, fmtLarge } from "../data/stocks";
-import { convertPrice } from "../data/api";
+import { convertPrice, fetchSearchResults } from "../data/api";
+import { useDebounce } from "../hooks/useDebounce";
 
 const STYLE = `
   .sl-page {
@@ -233,6 +234,43 @@ const STYLE = `
     text-align: center;
   }
 
+  /* External search */
+  .sl-ext-header {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 16px 10px 6px;
+    margin: 0 -10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sl-ext-prompt {
+    padding: 12px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-3);
+    cursor: pointer;
+    border-radius: 6px;
+    margin: 0 -10px;
+    transition: background 0.08s, color 0.08s;
+    border-bottom: 1px solid var(--border);
+  }
+  .sl-ext-prompt:hover { color: var(--accent); background: rgba(255,255,255,0.02); }
+  .sl-ext-loading {
+    padding: 16px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-3);
+  }
+  .sl-ext-add {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+
   /* Skeleton */
   @keyframes sl-pulse { 0%,100%{opacity:0.25} 50%{opacity:0.5} }
   .sl-skel-row {
@@ -274,12 +312,17 @@ function SkeletonList() {
 }
 
 export default function StockList({
-  stocks, watchlist, onStarClick, onSelect,
+  stocks, watchlist, onStarClick, onSelect, onAddStock,
   currency, usdToCadRate, quotesLoading, quotesLive,
 }) {
-  const [search, setSearch] = useState("");
+  const [search,     setSearch]     = useState("");
+  const [extResults, setExtResults] = useState(null);  // null = not searched yet
+  const [extLoading, setExtLoading] = useState(false);
   const inputRef = useRef(null);
 
+  const debouncedSearch = useDebounce(search, 400);
+
+  // "/" key focuses search
   useEffect(() => {
     const h = (e) => {
       if (e.key === "/" && document.activeElement?.tagName !== "INPUT") {
@@ -291,10 +334,42 @@ export default function StockList({
     return () => window.removeEventListener("keydown", h);
   }, []);
 
+  // Reset external results whenever the search query changes
+  useEffect(() => {
+    setExtResults(null);
+    setExtLoading(false);
+  }, [debouncedSearch]);
+
   const q = search.trim().toUpperCase();
-  const filtered = q
+  const localFiltered = q
     ? stocks.filter(s => s.ticker.includes(q) || s.name.toLowerCase().includes(search.trim().toLowerCase()))
     : stocks;
+
+  const runExternalSearch = useCallback(async () => {
+    const query = search.trim();
+    if (query.length < 2) return;
+    setExtLoading(true);
+    setExtResults(null);
+    const results = await fetchSearchResults(query);
+    // Filter out stocks already in the local list
+    const localTickers = new Set(stocks.map(s => s.ticker));
+    setExtResults(results.filter(r => !localTickers.has(r.symbol)));
+    setExtLoading(false);
+  }, [search, stocks]);
+
+  const handleInputKeyDown = useCallback((e) => {
+    if (e.key === "Enter" && search.trim().length >= 2 && localFiltered.length === 0) {
+      runExternalSearch();
+    }
+  }, [search, localFiltered.length, runExternalSearch]);
+
+  const handleExtSelect = useCallback((result) => {
+    onAddStock(result);
+    setSearch("");
+    setExtResults(null);
+  }, [onAddStock]);
+
+  const showExtPrompt = q.length >= 2 && localFiltered.length < 5 && extResults === null && !extLoading;
 
   return (
     <>
@@ -316,11 +391,12 @@ export default function StockList({
                   placeholder="Ticker or company name…"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
+                  onKeyDown={handleInputKeyDown}
                   autoComplete="off"
                   spellCheck="false"
                 />
                 {search && (
-                  <button className="sl-pill-clear" onClick={() => setSearch("")}>✕</button>
+                  <button className="sl-pill-clear" onClick={() => { setSearch(""); setExtResults(null); }}>✕</button>
                 )}
               </div>
             </div>
@@ -336,41 +412,81 @@ export default function StockList({
           <div className="sl-list">
             {quotesLoading ? (
               <SkeletonList />
-            ) : filtered.length === 0 ? (
-              <div className="sl-empty">No results for "{search}"</div>
             ) : (
-              filtered.map(s => {
-                const { price: disp, converted } = convertPrice(s.price, s.exchange, currency, usdToCadRate);
-                const dec      = disp != null && disp < 10 ? 3 : 2;
-                const hasPrice = typeof disp === "number";
-                const hasChg   = typeof s.change === "number";
-                const priceStr = hasPrice ? `${converted ? "~$" : "$"}${fmt(disp, dec)}` : "—";
-                const chgPos   = hasChg && s.change >= 0;
-                const starred = watchlist.includes(s.ticker);
+              <>
+                {/* Local results */}
+                {localFiltered.map(s => {
+                  const { price: disp, converted } = convertPrice(s.price, s.exchange, currency, usdToCadRate);
+                  const dec      = disp != null && disp < 10 ? 3 : 2;
+                  const hasPrice = typeof disp === "number";
+                  const hasChg   = typeof s.change === "number";
+                  const priceStr = hasPrice ? `${converted ? "~$" : "$"}${fmt(disp, dec)}` : "—";
+                  const chgPos   = hasChg && s.change >= 0;
+                  const starred  = watchlist.includes(s.ticker);
 
-                return (
-                  <div key={s.ticker} className="sl-row" onClick={() => onSelect(s)}>
-                    <div className="sl-row-left">
-                      <span className="sl-ticker">{s.ticker}</span>
-                      <span className="sl-name">{s.name}</span>
-                      <span className="sl-exch">{s.exchange}</span>
+                  return (
+                    <div key={s.ticker} className="sl-row" onClick={() => onSelect(s)}>
+                      <div className="sl-row-left">
+                        <span className="sl-ticker">{s.ticker}</span>
+                        <span className="sl-name">{s.name}</span>
+                        <span className="sl-exch">{s.exchange}</span>
+                      </div>
+                      <div className="sl-row-right">
+                        <span className="sl-price">{priceStr}</span>
+                        <span className={`sl-chg ${hasChg ? (chgPos ? "pos" : "neg") : "neu"}`}>
+                          {hasChg ? `${chgPos ? "+" : ""}${fmt(s.change)}%` : "—"}
+                        </span>
+                        <span className="sl-cap">{fmtLarge(s.mktCap)}</span>
+                        <button
+                          className={`sl-star ${starred ? "on" : "off"}`}
+                          onClick={e => { e.stopPropagation(); onStarClick(s.ticker); }}
+                        >
+                          {starred ? "★" : "☆"}
+                        </button>
+                      </div>
                     </div>
-                    <div className="sl-row-right">
-                      <span className="sl-price">{priceStr}</span>
-                      <span className={`sl-chg ${hasChg ? (chgPos ? "pos" : "neg") : "neu"}`}>
-                        {hasChg ? `${chgPos ? "+" : ""}${fmt(s.change)}%` : "—"}
-                      </span>
-                      <span className="sl-cap">{fmtLarge(s.mktCap)}</span>
-                      <button
-                        className={`sl-star ${starred ? "on" : "off"}`}
-                        onClick={e => { e.stopPropagation(); onStarClick(s.ticker); }}
-                      >
-                        {starred ? "★" : "☆"}
-                      </button>
-                    </div>
+                  );
+                })}
+
+                {/* No local results */}
+                {localFiltered.length === 0 && extResults === null && !extLoading && !showExtPrompt && (
+                  <div className="sl-empty">No results for "{search}"</div>
+                )}
+
+                {/* Prompt to search all markets */}
+                {showExtPrompt && (
+                  <div className="sl-ext-prompt" onClick={runExternalSearch}>
+                    Search all markets for "{search}" →
                   </div>
-                );
-              })
+                )}
+
+                {/* External search loading */}
+                {extLoading && (
+                  <div className="sl-ext-loading">Searching all markets…</div>
+                )}
+
+                {/* External search results */}
+                {extResults !== null && extResults.length === 0 && (
+                  <div className="sl-empty">No results for "{search}"</div>
+                )}
+                {extResults !== null && extResults.length > 0 && (
+                  <>
+                    <div className="sl-ext-header">All markets</div>
+                    {extResults.map(r => (
+                      <div key={r.symbol} className="sl-row" onClick={() => handleExtSelect(r)}>
+                        <div className="sl-row-left">
+                          <span className="sl-ticker">{r.symbol}</span>
+                          <span className="sl-name">{r.name}</span>
+                          <span className="sl-exch">{r.exchange}</span>
+                        </div>
+                        <div className="sl-row-right">
+                          <span className="sl-ext-add">+ Add</span>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </>
             )}
           </div>
         </div>
