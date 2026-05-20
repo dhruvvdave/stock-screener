@@ -4,7 +4,7 @@ function isInvalidQuote(data) {
   const numericFields = ["c", "d", "dp", "h", "l", "o", "pc", "t"];
   if (numericFields.some((field) => typeof data[field] !== "number")) return true;
 
-  return data.t === 0 || (data.c === 0 && data.pc === 0 && data.h === 0 && data.l === 0 && data.o === 0);
+  return data.t === 0;
 }
 
 export default async function handler(req, res) {

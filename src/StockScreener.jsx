@@ -129,7 +129,16 @@ function formatChange(value) {
 
 function formatUpdated(timestamp) {
   if (!timestamp) return "—";
-  return new Date(timestamp * 1000).toLocaleString();
+  return new Date(timestamp * 1000).toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+  });
 }
 
 export default function StockScreener() {
