@@ -303,6 +303,11 @@ const STYLE = `
     .sd-price-block { text-align: left; }
     .sd-chg-row { justify-content: flex-start; }
     .sd-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    /* Orphaned last item in 2-col grid spans both columns to keep symmetry */
+    .sd-metrics-grid .sd-kv:last-child:nth-child(odd) {
+      grid-column: span 2;
+    }
+    .sd-container { padding: 0 16px 80px; }
   }
 `;
 

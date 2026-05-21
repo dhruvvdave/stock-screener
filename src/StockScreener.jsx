@@ -12,6 +12,7 @@ import {
   fetchNewsSentiment,
   fetchFundamentals,
   fetchNews,
+  fetchMetrics,
 } from "./data/api";
 import { fmt } from "./data/stocks";
 import { useLocalStorage } from "./hooks/useLocalStorage";
@@ -241,6 +242,8 @@ export default function StockScreener() {
   const previousPricesRef = useRef({});
   const crossedStateRef = useRef({});
   const loadingProfilesRef = useRef(new Set());
+  const loadingMetricsRef = useRef(new Set());
+  const fetchedMetricsRef = useRef(new Set());
 
   const sortedStocks = useMemo(() => sortStocks(stocks, sort), [stocks, sort]);
   const clampedNavIndex = Math.min(navIndex, Math.max(0, sortedStocks.length - 1));
@@ -450,6 +453,35 @@ export default function StockScreener() {
         });
     });
   }, [profiles, setStocks, stocks]);
+
+  useEffect(() => {
+    if (!stocks.length) return;
+
+    const missing = stocks.filter(
+      (s) => !fetchedMetricsRef.current.has(s.ticker) && !loadingMetricsRef.current.has(s.ticker)
+    );
+    if (!missing.length) return;
+
+    missing.forEach((stock) => {
+      loadingMetricsRef.current.add(stock.ticker);
+      fetchMetrics(stock.ticker, stock.exchange)
+        .then((data) => {
+          fetchedMetricsRef.current.add(stock.ticker);
+          if (!data) return;
+          setStocks((prev) => prev.map((s) => {
+            if (s.ticker !== stock.ticker) return s;
+            const merged = { ...s };
+            for (const [key, val] of Object.entries(data)) {
+              if (val != null && merged[key] == null) merged[key] = val;
+            }
+            return merged;
+          }));
+        })
+        .finally(() => {
+          loadingMetricsRef.current.delete(stock.ticker);
+        });
+    });
+  }, [stocks, setStocks]);
 
   useEffect(() => {
     if (!hasActivatedUI) return;

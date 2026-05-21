@@ -2,19 +2,30 @@ const STYLE = `
   .hdr {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
     height: 40px;
     padding: 0 20px;
     border-bottom: 1px solid var(--border);
-    background: rgba(5,5,5,0.9);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(5,5,5,0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     position: sticky;
     top: 0;
     z-index: 100;
     flex-shrink: 0;
     gap: 18px;
   }
+
+  .hdr-brand {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .hdr-spacer { flex: 1; }
 
   .hdr-currency {
     display: flex;
@@ -66,6 +77,8 @@ export default function Header({
     <>
       <style>{STYLE}</style>
       <header className="hdr">
+        <div className="hdr-brand">Markr</div>
+        <div className="hdr-spacer" />
         <div className="hdr-currency">
           <span
             className={currency === "USD" ? "hdr-ccy-on" : "hdr-ccy-off"}

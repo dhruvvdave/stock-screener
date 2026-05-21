@@ -246,6 +246,19 @@ export async function fetchNewsSentiment(ticker, exchange = "") {
   }
 }
 
+// ── Finnhub stock metrics (fundamentals fallback, no Yahoo needed) ─────────
+
+export async function fetchMetrics(ticker, exchange = "") {
+  const symbol = toFinnhubSymbol(ticker, exchange);
+  try {
+    const r = await fetch(`/api/metrics?symbol=${encodeURIComponent(symbol)}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
 // ── Company fundamentals via /api/fundamentals proxy (Yahoo, no key) ───────
 
 export async function fetchFundamentals(ticker, exchange = "") {
