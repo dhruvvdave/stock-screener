@@ -366,6 +366,8 @@ const STYLE = `
     }
   }
 `;
+const MAX_LOCAL_SUGGESTIONS = 4;
+const MAX_REMOTE_SUGGESTIONS = 8;
 
 function TickerlyLogo() {
   return (
@@ -451,7 +453,7 @@ export default function StockList({
       const results = await fetchSearchResults(query);
       if (cancelled) return;
       const localTickers = new Set(stocks.map((s) => s.ticker));
-      setRemoteSuggestions(results.filter((r) => !localTickers.has(r.symbol)).slice(0, 8));
+      setRemoteSuggestions(results.filter((r) => !localTickers.has(r.symbol)).slice(0, MAX_REMOTE_SUGGESTIONS));
       setSuggestionsOpen(true);
       setSuggestionIndex(-1);
     };
@@ -464,7 +466,7 @@ export default function StockList({
     if (!search.trim()) return [];
     const locals = stocks
       .filter((s) => s.ticker.includes(q) || s.name.toLowerCase().includes(search.trim().toLowerCase()))
-      .slice(0, 4)
+      .slice(0, MAX_LOCAL_SUGGESTIONS)
       .map((s) => ({ symbol: s.ticker, name: s.name, exchange: s.exchange, local: true }));
 
     const seen = new Set(locals.map((s) => s.symbol));

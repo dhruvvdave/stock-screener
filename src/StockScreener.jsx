@@ -149,6 +149,7 @@ const STYLE = `
     color: var(--text-2);
   }
 `;
+const QUOTE_REFRESH_INTERVAL_MS = 45000;
 
 function formatClock(date = new Date()) {
   return date.toLocaleTimeString("en-US", {
@@ -288,8 +289,8 @@ export default function StockScreener() {
       });
 
       // Detect threshold crossings on each refresh and fire notifications only on state transitions.
-      Object.entries(priceAlerts).forEach(([ticker, thresholdRaw]) => {
-        const threshold = Number(thresholdRaw);
+      Object.entries(priceAlerts).forEach(([ticker, thresholdInput]) => {
+        const threshold = Number(thresholdInput);
         const prev = previousPricesRef.current[ticker];
         const current = nextPrices[ticker];
         if (!Number.isFinite(threshold) || typeof prev !== "number" || typeof current !== "number") return;
@@ -367,8 +368,9 @@ export default function StockScreener() {
   }, []);
 
   useEffect(() => {
+    // Defer the first refresh by one macrotask to satisfy strict lint rules around effect sync state updates.
     const t = setTimeout(() => { refreshQuotes(); }, 0);
-    const interval = setInterval(refreshQuotes, 45000);
+    const interval = setInterval(refreshQuotes, QUOTE_REFRESH_INTERVAL_MS);
     return () => {
       clearTimeout(t);
       clearInterval(interval);
