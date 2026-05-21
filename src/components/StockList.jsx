@@ -103,6 +103,7 @@ const STYLE = `
   .sl-pill-wrap {
     position: relative;
     max-width: 540px;
+    width: 100%;
     z-index: 5;
   }
   .sl-pill {
@@ -386,12 +387,22 @@ const STYLE = `
     .sl-head .sl-sort-cap {
       display: none;
     }
+    .sl-hint { display: none; }
+  }
+
+  @media (max-width: 400px) {
+    .sl-page.minimal .sl-title {
+      font-size: clamp(28px, 9vw, 48px);
+    }
+    .sl-pill-wrap {
+      max-width: calc(100vw - 48px);
+    }
   }
 `;
 const MAX_LOCAL_SUGGESTIONS = 4;
 const MAX_REMOTE_SUGGESTIONS = 8;
 
-function TickerlyLogo() {
+function MarkrLogo() {
   return (
     <svg className="sl-logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <rect x="1.5" y="1.5" width="21" height="21" rx="5" stroke="var(--border-2)" />
@@ -558,11 +569,11 @@ export default function StockList({
         <div className="sl-container">
           <div className="sl-hero">
             <div className="sl-brand-wrap">
-              <TickerlyLogo />
-              {!minimalSplash && <div className="sl-brand">Tickerly</div>}
+              <MarkrLogo />
+              {!minimalSplash && <div className="sl-brand">Markr</div>}
             </div>
             <h1 className="sl-title">
-              {minimalSplash ? "Tickerly" : <>Any ticker, instantly<span className="sl-cursor">_</span></>}
+              {minimalSplash ? "Markr" : <>Any ticker, instantly<span className="sl-cursor">_</span></>}
             </h1>
             <div className="sl-pill-wrap">
               <div className="sl-pill">
