@@ -128,6 +128,23 @@ export async function fetchSearchResults(query) {
   }
 }
 
+// ── Company profile via /api/profile proxy ──────────────────────────────────
+
+export async function fetchCompanyProfile(ticker, exchange = "") {
+  if (!ticker) return null;
+  const yahooSymbol = toYahooSymbol(ticker, exchange);
+  const finnhubSymbol = toFinnhubSymbol(ticker, exchange);
+  try {
+    const r = await fetch(
+      `/api/profile?symbol=${encodeURIComponent(yahooSymbol)}&finnhubSymbol=${encodeURIComponent(finnhubSymbol)}`
+    );
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
 // ── Technical indicators computed from price history ─────────────────────
 
 export function calculateTechnicals(prices) {
