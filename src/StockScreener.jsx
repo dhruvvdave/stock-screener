@@ -223,6 +223,7 @@ export default function StockScreener() {
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [quotesLive, setQuotesLive] = useState(false);
   const [selectedTicker, setSelectedTicker] = useState(null);
+  const [hasActivatedUI, setHasActivatedUI] = useState(false);
   const [chartRange, setChartRange] = useState("1mo");
   const [candleData, setCandleData] = useState(null);
   const [sort, setSort] = useState({ key: "ticker", direction: "asc" });
@@ -336,6 +337,7 @@ export default function StockScreener() {
     });
 
     if (options.select || alreadyExists) {
+      setHasActivatedUI(true);
       setSelectedTicker(incoming.ticker);
     }
   }, [setStocks]);
@@ -420,6 +422,8 @@ export default function StockScreener() {
   }, [profiles, setStocks, stocks]);
 
   useEffect(() => {
+    if (!hasActivatedUI) return undefined;
+
     const onKeyDown = (event) => {
       const tag = document.activeElement?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable) return;
@@ -451,7 +455,7 @@ export default function StockScreener() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [clampedNavIndex, selectedTicker, sortedStocks, toggleWatch]);
+  }, [clampedNavIndex, hasActivatedUI, selectedTicker, sortedStocks, toggleWatch]);
 
   const trackedTickers = useMemo(() => Array.from(new Set([...watchlist, ...Object.keys(portfolio)])), [portfolio, watchlist]);
 
@@ -633,16 +637,38 @@ export default function StockScreener() {
     <>
       <style>{STYLE}</style>
       <main className="ts-app">
-        <Header
-          clock={clock}
-          watchlistCount={watchlist.length}
-          currency={currency}
-          onCurrencyToggle={setCurrency}
-          quotesLoading={quotesLoading}
-          quotesLive={quotesLive}
-        />
+        {hasActivatedUI && (
+          <Header
+            clock={clock}
+            watchlistCount={watchlist.length}
+            currency={currency}
+            onCurrencyToggle={setCurrency}
+            quotesLoading={quotesLoading}
+            quotesLive={quotesLive}
+          />
+        )}
 
-        {selectedStock ? (
+        {!hasActivatedUI ? (
+          <StockList
+            stocks={sortedStocks}
+            watchlist={watchlist}
+            onStarClick={toggleWatch}
+            onSelect={(stock) => {
+              setHasActivatedUI(true);
+              setSelectedTicker(stock.ticker);
+            }}
+            onAddStock={addStock}
+            currency={currency}
+            usdToCadRate={usdToCadRate}
+            quotesLoading={quotesLoading}
+            quotesLive={quotesLive}
+            activeTicker={activeTicker}
+            sort={sort}
+            onSortChange={onSortChange}
+            rightRail={null}
+            minimalSplash
+          />
+        ) : selectedStock ? (
           <StockDetail
             stock={selectedStock}
             onBack={() => { setSelectedTicker(null); setCandleData(null); }}
@@ -661,7 +687,10 @@ export default function StockScreener() {
             stocks={sortedStocks}
             watchlist={watchlist}
             onStarClick={toggleWatch}
-            onSelect={(stock) => setSelectedTicker(stock.ticker)}
+            onSelect={(stock) => {
+              setHasActivatedUI(true);
+              setSelectedTicker(stock.ticker);
+            }}
             onAddStock={addStock}
             currency={currency}
             usdToCadRate={usdToCadRate}
