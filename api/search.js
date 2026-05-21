@@ -1,12 +1,34 @@
 function resolveExchange(item) {
-  if (item.displaySymbol.startsWith("TSXV:")) return "TSX-V";
-  if (item.displaySymbol.startsWith("TSX:"))  return "TSX";
+  const ds = item.displaySymbol ?? "";
+  if (ds.startsWith("TSXV:"))   return "TSX-V";
+  if (ds.startsWith("TSX:"))    return "TSX";
+  if (ds.startsWith("LSE:"))    return "LSE";
+  if (ds.startsWith("ASX:"))    return "ASX";
+  if (ds.startsWith("XETRA:"))  return "XETRA";
+  if (ds.startsWith("NSE:"))    return "NSE";
+
   const exch = (item.primaryExch ?? item.exchange ?? "").toUpperCase();
-  if (exch.includes("TORONTO") || exch.includes("TSX")) return "TSX";
-  if (exch.includes("NEW YORK") || exch === "NYSE")     return "NYSE";
-  if (exch.includes("NASDAQ"))                          return "NASDAQ";
+  if (exch.includes("TORONTO") || exch === "TSX")    return "TSX";
+  if (exch.includes("VENTURE") || exch === "TSXV")   return "TSX-V";
+  if (exch.includes("NEW YORK") || exch === "NYSE")  return "NYSE";
+  if (exch.includes("NASDAQ"))                       return "NASDAQ";
+  if (exch.includes("AMEX") || exch === "AMEX")      return "AMEX";
+  if (exch.includes("OTC") || exch === "PINK")       return "OTC";
+  if (exch.includes("LONDON") || exch === "LSE")     return "LSE";
   return exch || "US";
 }
+
+// Strip exchange prefix from displaySymbol; keep the raw symbol for non-prefixed forms
+function extractSymbol(item) {
+  const ds = item.displaySymbol ?? "";
+  return ds.includes(":") ? ds.split(":").pop() : ds;
+}
+
+const ALLOWED_TYPES = new Set([
+  "Common Stock", "EQS",
+  "ADR",          // American Depositary Receipt
+  "ETF",
+]);
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -14,8 +36,11 @@ export default async function handler(req, res) {
   const key = globalThis.process?.env?.FINNHUB_KEY;
   if (!key) return res.status(500).json({ error: "Missing FINNHUB_KEY" });
 
-  const q = (req.query.q ?? "").trim();
-  if (!q) return res.status(400).json({ error: "Missing query" });
+  const raw = (req.query.q ?? "").trim();
+  if (!raw) return res.status(400).json({ error: "Missing query" });
+
+  // Strip common suffixes users might type (.V, .TO, .L) before sending to Finnhub
+  const q = raw.replace(/\.(V|TO|L|AX)$/i, "");
 
   try {
     const r = await fetch(
@@ -25,11 +50,10 @@ export default async function handler(req, res) {
 
     const d = await r.json();
     const results = (d.result ?? [])
-      .filter(s => s.type === "Common Stock" || s.type === "EQS")
-      .slice(0, 10)
+      .filter(s => ALLOWED_TYPES.has(s.type))
+      .slice(0, 12)
       .map(s => ({
-        // Strip exchange prefix (e.g. "TSX:SHOP" → "SHOP") for clean internal ticker
-        symbol:   s.displaySymbol.includes(":") ? s.displaySymbol.split(":").pop() : s.displaySymbol,
+        symbol:   extractSymbol(s),
         name:     s.description,
         exchange: resolveExchange(s),
       }));

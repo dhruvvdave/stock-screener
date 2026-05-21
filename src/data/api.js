@@ -13,7 +13,10 @@ export const YAHOO_SYMBOLS = {
 // Convert bare ticker + exchange to Yahoo Finance symbol
 export function toYahooSymbol(ticker, exchange) {
   if (YAHOO_SYMBOLS[ticker]) return YAHOO_SYMBOLS[ticker];
-  if (exchange === "TSX" || exchange === "TSX-V") return ticker + ".TO";
+  if (exchange === "TSX")   return ticker + ".TO";
+  if (exchange === "TSX-V") return ticker + ".V";   // Venture exchange uses .V, not .TO
+  if (exchange === "LSE")   return ticker + ".L";
+  if (exchange === "ASX")   return ticker + ".AX";
   return ticker;
 }
 
@@ -29,7 +32,11 @@ function toFinnhubSymbol(ticker, exchange) {
   if (FINNHUB_SYMBOLS[ticker]) return FINNHUB_SYMBOLS[ticker];
   if (exchange === "TSX")   return `TSX:${ticker}`;
   if (exchange === "TSX-V") return `TSXV:${ticker}`;
-  return ticker;
+  if (exchange === "LSE")   return `LSE:${ticker}`;
+  if (exchange === "ASX")   return `ASX:${ticker}`;
+  if (exchange === "XETRA") return `XETRA:${ticker}`;
+  if (exchange === "NSE")   return `NSE:${ticker}`;
+  return ticker;  // US exchanges pass through unchanged (NYSE, NASDAQ, AMEX, OTC)
 }
 
 // ── Exchange rate (no API key needed) ──────────────────────────────────────
@@ -104,12 +111,15 @@ export async function fetchSupplementaryQuotes(stocks) {
   }
 }
 
-// ── Yahoo Finance candle data via /api/candle proxy (no key needed) ───────
+// ── Candle/chart data via /api/candle proxy (Finnhub primary, Yahoo fallback)
 
 export async function fetchCandleData(ticker, exchange = "", range = "1mo") {
-  const symbol = YAHOO_SYMBOLS[ticker] ?? toYahooSymbol(ticker, exchange);
+  const yahooSymbol   = toYahooSymbol(ticker, exchange);
+  const finnhubSymbol = toFinnhubSymbol(ticker, exchange);
   try {
-    const r = await fetch(`/api/candle?symbol=${encodeURIComponent(symbol)}&range=${range}`);
+    const r = await fetch(
+      `/api/candle?symbol=${encodeURIComponent(yahooSymbol)}&finnhubSymbol=${encodeURIComponent(finnhubSymbol)}&range=${range}`
+    );
     if (!r.ok) return null;
     const d = await r.json();
     return d.prices ?? null;
