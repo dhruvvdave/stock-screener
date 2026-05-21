@@ -559,7 +559,7 @@ export default function StockList({
           <div className="sl-hero">
             <div className="sl-brand-wrap">
               <TickerlyLogo />
-              <div className="sl-brand">Tickerly</div>
+              {!minimalSplash && <div className="sl-brand">Tickerly</div>}
             </div>
             <h1 className="sl-title">
               {minimalSplash ? "Tickerly" : <>Any ticker, instantly<span className="sl-cursor">_</span></>}

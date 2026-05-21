@@ -342,6 +342,11 @@ export default function StockScreener() {
     }
   }, [setStocks]);
 
+  const handleSelectStock = useCallback((stock) => {
+    setHasActivatedUI(true);
+    setSelectedTicker(stock.ticker);
+  }, []);
+
   const onSortChange = useCallback((key) => {
     setSort((prev) => {
       if (prev.key === key) {
@@ -422,7 +427,7 @@ export default function StockScreener() {
   }, [profiles, setStocks, stocks]);
 
   useEffect(() => {
-    if (!hasActivatedUI) return undefined;
+    if (!hasActivatedUI) return;
 
     const onKeyDown = (event) => {
       const tag = document.activeElement?.tagName;
@@ -653,10 +658,7 @@ export default function StockScreener() {
             stocks={sortedStocks}
             watchlist={watchlist}
             onStarClick={toggleWatch}
-            onSelect={(stock) => {
-              setHasActivatedUI(true);
-              setSelectedTicker(stock.ticker);
-            }}
+            onSelect={handleSelectStock}
             onAddStock={addStock}
             currency={currency}
             usdToCadRate={usdToCadRate}
@@ -665,7 +667,6 @@ export default function StockScreener() {
             activeTicker={activeTicker}
             sort={sort}
             onSortChange={onSortChange}
-            rightRail={null}
             minimalSplash
           />
         ) : selectedStock ? (
@@ -687,10 +688,7 @@ export default function StockScreener() {
             stocks={sortedStocks}
             watchlist={watchlist}
             onStarClick={toggleWatch}
-            onSelect={(stock) => {
-              setHasActivatedUI(true);
-              setSelectedTicker(stock.ticker);
-            }}
+            onSelect={handleSelectStock}
             onAddStock={addStock}
             currency={currency}
             usdToCadRate={usdToCadRate}
