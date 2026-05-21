@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { fmt, fmtLarge } from "../data/stocks";
 import { convertPrice, fetchSearchResults } from "../data/api";
 import { useDebounce } from "../hooks/useDebounce";
@@ -12,16 +12,15 @@ const STYLE = `
   }
 
   .sl-container {
-    max-width: 880px;
+    max-width: 1120px;
     margin: 0 auto;
     padding: 0 24px 80px;
     width: 100%;
   }
 
-  /* Hero */
   .sl-hero {
     position: relative;
-    padding: 80px 0 44px;
+    padding: 66px 0 32px;
     text-align: left;
   }
   .sl-hero::before {
@@ -30,14 +29,22 @@ const STYLE = `
     top: -100px;
     left: 50%;
     transform: translateX(-50%);
-    width: 800px;
-    height: 600px;
+    width: 860px;
+    height: 620px;
     border-radius: 50%;
     background: radial-gradient(ellipse at center, rgba(255,255,255,0.04) 0%, transparent 65%);
     pointer-events: none;
     z-index: 0;
   }
 
+  .sl-brand-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    position: relative;
+    z-index: 1;
+  }
   .sl-brand {
     font-family: var(--font-mono);
     font-size: 10px;
@@ -45,9 +52,12 @@ const STYLE = `
     color: var(--accent);
     letter-spacing: 0.15em;
     text-transform: uppercase;
-    margin-bottom: 16px;
-    position: relative;
-    z-index: 1;
+  }
+  .sl-logo {
+    width: 18px;
+    height: 18px;
+    display: block;
+    opacity: 0.92;
   }
 
   .sl-title {
@@ -57,7 +67,7 @@ const STYLE = `
     color: var(--text-1);
     line-height: 1.08;
     letter-spacing: -0.025em;
-    margin-bottom: 36px;
+    margin-bottom: 22px;
     position: relative;
     z-index: 1;
   }
@@ -68,11 +78,10 @@ const STYLE = `
   }
   @keyframes sl-blink { 0%,100%{opacity:1} 50%{opacity:0} }
 
-  /* Search pill */
   .sl-pill-wrap {
     position: relative;
     max-width: 540px;
-    z-index: 1;
+    z-index: 5;
   }
   .sl-pill {
     display: flex;
@@ -120,6 +129,48 @@ const STYLE = `
   }
   .sl-pill-clear:hover { color: var(--text-1); }
 
+  .sl-autofill {
+    margin-top: 8px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: rgba(15, 15, 15, 0.96);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+  }
+  .sl-autofill-item {
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    padding: 9px 11px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-ui);
+    font-size: 12px;
+  }
+  .sl-autofill-item:last-child { border-bottom: none; }
+  .sl-autofill-item.on,
+  .sl-autofill-item:hover { background: rgba(255,255,255,0.03); color: var(--text-1); }
+  .sl-autofill-symbol {
+    font-family: var(--font-mono);
+    color: var(--accent);
+    font-size: 11px;
+    margin-right: 12px;
+    min-width: 64px;
+    flex-shrink: 0;
+  }
+  .sl-autofill-exch {
+    color: var(--text-3);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    margin-left: 10px;
+    flex-shrink: 0;
+  }
+
   .sl-hint {
     margin-top: 12px;
     font-family: var(--font-mono);
@@ -130,8 +181,47 @@ const STYLE = `
     position: relative;
   }
 
-  /* List */
-  .sl-list { width: 100%; }
+  .sl-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+  }
+  .sl-content.with-rail {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+  .sl-main {
+    min-width: 0;
+  }
+  .sl-rail {
+    position: sticky;
+    top: 62px;
+    align-self: start;
+  }
+
+  .sl-head {
+    display: grid;
+    grid-template-columns: 1fr 80px 80px 88px 30px;
+    gap: 8px;
+    padding: 0 10px 8px;
+    border-bottom: 1px solid var(--border);
+    margin: 0 -10px 4px;
+  }
+  .sl-sort-btn {
+    border: none;
+    background: none;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: right;
+    cursor: pointer;
+    padding: 0;
+  }
+  .sl-sort-btn.left { text-align: left; }
+  .sl-sort-btn:hover { color: var(--text-2); }
+  .sl-sort-btn.on { color: var(--accent); }
 
   .sl-row {
     display: flex;
@@ -146,6 +236,10 @@ const STYLE = `
     transition: background 0.08s;
   }
   .sl-row:hover { background: rgba(255,255,255,0.028); }
+  .sl-row.active {
+    background: rgba(232, 160, 32, 0.10);
+    border: 1px solid rgba(232, 160, 32, 0.20);
+  }
 
   .sl-row-left {
     display: flex;
@@ -234,44 +328,6 @@ const STYLE = `
     text-align: center;
   }
 
-  /* External search */
-  .sl-ext-header {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--text-3);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 16px 10px 6px;
-    margin: 0 -10px;
-    border-bottom: 1px solid var(--border);
-  }
-  .sl-ext-prompt {
-    padding: 12px 10px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-3);
-    cursor: pointer;
-    border-radius: 6px;
-    margin: 0 -10px;
-    transition: background 0.08s, color 0.08s;
-    border-bottom: 1px solid var(--border);
-  }
-  .sl-ext-prompt:hover { color: var(--accent); background: rgba(255,255,255,0.02); }
-  .sl-ext-loading {
-    padding: 16px 10px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-3);
-  }
-  .sl-ext-add {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--accent);
-    letter-spacing: 0.04em;
-    flex-shrink: 0;
-  }
-
-  /* Skeleton */
   @keyframes sl-pulse { 0%,100%{opacity:0.25} 50%{opacity:0.5} }
   .sl-skel-row {
     display: flex;
@@ -288,13 +344,40 @@ const STYLE = `
     animation: sl-pulse 1.6s ease-in-out infinite;
   }
 
+  @media (max-width: 980px) {
+    .sl-content.with-rail {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .sl-rail {
+      position: static;
+    }
+  }
+
   @media (max-width: 640px) {
-    .sl-hero { padding: 52px 0 32px; }
+    .sl-hero { padding: 52px 0 28px; }
     .sl-name { max-width: 130px; }
     .sl-cap  { display: none; }
     .sl-exch { display: none; }
+    .sl-head {
+      grid-template-columns: 1fr 80px 80px 30px;
+    }
+    .sl-head .sl-sort-cap {
+      display: none;
+    }
   }
 `;
+const MAX_LOCAL_SUGGESTIONS = 4;
+const MAX_REMOTE_SUGGESTIONS = 8;
+
+function TickerlyLogo() {
+  return (
+    <svg className="sl-logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="21" height="21" rx="5" stroke="var(--border-2)" />
+      <path d="M5 15.5L9.2 11.4L12.6 13.9L18.5 8.1" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="18.5" cy="8.1" r="1.2" fill="var(--accent)" />
+    </svg>
+  );
+}
 
 function SkeletonList() {
   return Array.from({ length: 14 }, (_, i) => (
@@ -311,21 +394,37 @@ function SkeletonList() {
   ));
 }
 
+function sortArrow(sort, key) {
+  if (sort.key !== key) return "";
+  return sort.direction === "asc" ? " ↑" : " ↓";
+}
+
 export default function StockList({
-  stocks, watchlist, onStarClick, onSelect, onAddStock,
-  currency, usdToCadRate, quotesLoading, quotesLive,
+  stocks,
+  watchlist,
+  onStarClick,
+  onSelect,
+  onAddStock,
+  currency,
+  usdToCadRate,
+  quotesLoading,
+  quotesLive,
+  activeTicker,
+  sort,
+  onSortChange,
+  rightRail,
 }) {
-  const [search,     setSearch]     = useState("");
-  const [extResults, setExtResults] = useState(null);  // null = not searched yet
-  const [extLoading, setExtLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [remoteSuggestions, setRemoteSuggestions] = useState([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [suggestionIndex, setSuggestionIndex] = useState(-1);
   const inputRef = useRef(null);
 
-  const debouncedSearch = useDebounce(search, 400);
+  const debouncedSearch = useDebounce(search, 260);
 
-  // "/" key focuses search
   useEffect(() => {
     const h = (e) => {
-      if (e.key === "/" && document.activeElement?.tagName !== "INPUT") {
+      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
         e.preventDefault();
         inputRef.current?.focus();
       }
@@ -334,42 +433,100 @@ export default function StockList({
     return () => window.removeEventListener("keydown", h);
   }, []);
 
-  // Reset external results whenever the search query changes
-  useEffect(() => {
-    setExtResults(null);
-    setExtLoading(false);
-  }, [debouncedSearch]);
-
   const q = search.trim().toUpperCase();
   const localFiltered = q
-    ? stocks.filter(s => s.ticker.includes(q) || s.name.toLowerCase().includes(search.trim().toLowerCase()))
+    ? stocks.filter((s) => s.ticker.includes(q) || s.name.toLowerCase().includes(search.trim().toLowerCase()))
     : stocks;
 
-  const runExternalSearch = useCallback(async () => {
-    const query = search.trim();
-    if (query.length < 2) return;
-    setExtLoading(true);
-    setExtResults(null);
-    const results = await fetchSearchResults(query);
-    // Filter out stocks already in the local list
-    const localTickers = new Set(stocks.map(s => s.ticker));
-    setExtResults(results.filter(r => !localTickers.has(r.symbol)));
-    setExtLoading(false);
-  }, [search, stocks]);
+  useEffect(() => {
+    let cancelled = false;
 
-  const handleInputKeyDown = useCallback((e) => {
-    if (e.key === "Enter" && search.trim().length >= 2 && localFiltered.length === 0) {
-      runExternalSearch();
-    }
-  }, [search, localFiltered.length, runExternalSearch]);
+    const run = async () => {
+      const query = debouncedSearch.trim();
+      if (query.length < 1) {
+        setRemoteSuggestions([]);
+        setSuggestionsOpen(false);
+        setSuggestionIndex(-1);
+        return;
+      }
 
-  const handleExtSelect = useCallback((result) => {
-    onAddStock(result);
+      const results = await fetchSearchResults(query);
+      if (cancelled) return;
+      const localTickers = new Set(stocks.map((s) => s.ticker));
+      setRemoteSuggestions(results.filter((r) => !localTickers.has(r.symbol)).slice(0, MAX_REMOTE_SUGGESTIONS));
+      setSuggestionsOpen(true);
+      setSuggestionIndex(-1);
+    };
+
+    run();
+    return () => { cancelled = true; };
+  }, [debouncedSearch, stocks]);
+
+  const suggestions = useMemo(() => {
+    if (!search.trim()) return [];
+    const locals = stocks
+      .filter((s) => s.ticker.includes(q) || s.name.toLowerCase().includes(search.trim().toLowerCase()))
+      .slice(0, MAX_LOCAL_SUGGESTIONS)
+      .map((s) => ({ symbol: s.ticker, name: s.name, exchange: s.exchange, local: true }));
+
+    const seen = new Set(locals.map((s) => s.symbol));
+    const remotes = remoteSuggestions.filter((s) => !seen.has(s.symbol)).slice(0, 6);
+    return [...locals, ...remotes];
+  }, [q, remoteSuggestions, search, stocks]);
+
+  const selectSuggestion = useCallback((result) => {
+    onAddStock(result, { select: true });
     setSearch("");
-    setExtResults(null);
+    setRemoteSuggestions([]);
+    setSuggestionsOpen(false);
+    setSuggestionIndex(-1);
   }, [onAddStock]);
 
-  const showExtPrompt = q.length >= 2 && localFiltered.length < 5 && extResults === null && !extLoading;
+  const addTypedTicker = useCallback(() => {
+    const symbol = search.trim().toUpperCase();
+    if (!symbol) return;
+    onAddStock({ symbol, name: symbol, exchange: "US" }, { select: true });
+    setSearch("");
+    setSuggestionsOpen(false);
+    setSuggestionIndex(-1);
+  }, [onAddStock, search]);
+
+  const handleInputKeyDown = useCallback((e) => {
+    if (e.key === "ArrowDown" && suggestions.length > 0) {
+      e.preventDefault();
+      setSuggestionsOpen(true);
+      setSuggestionIndex((i) => (i + 1) % suggestions.length);
+      return;
+    }
+
+    if (e.key === "ArrowUp" && suggestions.length > 0) {
+      e.preventDefault();
+      setSuggestionsOpen(true);
+      setSuggestionIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+      return;
+    }
+
+    if (e.key === "Escape") {
+      setSuggestionsOpen(false);
+      setSuggestionIndex(-1);
+      return;
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (suggestionsOpen && suggestionIndex >= 0 && suggestions[suggestionIndex]) {
+        selectSuggestion(suggestions[suggestionIndex]);
+      } else {
+        addTypedTicker();
+      }
+    }
+  }, [addTypedTicker, selectSuggestion, suggestionIndex, suggestions, suggestionsOpen]);
+
+  const renderSortHeader = (label, key, cls = "") => (
+    <button className={`sl-sort-btn ${sort.key === key ? "on" : ""} ${cls}`} onClick={() => onSortChange(key)}>
+      {label}{sortArrow(sort, key)}
+    </button>
+  );
 
   return (
     <>
@@ -377,9 +534,12 @@ export default function StockList({
       <div className="sl-page">
         <div className="sl-container">
           <div className="sl-hero">
-            <div className="sl-brand">MKTSCAN / PRO</div>
+            <div className="sl-brand-wrap">
+              <TickerlyLogo />
+              <div className="sl-brand">Tickerly</div>
+            </div>
             <h1 className="sl-title">
-              Stock lookup<span className="sl-cursor">_</span>
+              Any ticker, instantly<span className="sl-cursor">_</span>
             </h1>
             <div className="sl-pill-wrap">
               <div className="sl-pill">
@@ -390,104 +550,104 @@ export default function StockList({
                   type="text"
                   placeholder="Ticker or company name…"
                   value={search}
-                  onChange={e => setSearch(e.target.value)}
+                  onChange={(e) => { setSearch(e.target.value); setSuggestionsOpen(true); }}
+                  onFocus={() => search.trim() && setSuggestionsOpen(true)}
                   onKeyDown={handleInputKeyDown}
                   autoComplete="off"
                   spellCheck="false"
                 />
                 {search && (
-                  <button className="sl-pill-clear" onClick={() => { setSearch(""); setExtResults(null); }}>✕</button>
+                  <button className="sl-pill-clear" onClick={() => { setSearch(""); setSuggestionsOpen(false); }}>
+                    ✕
+                  </button>
                 )}
               </div>
+
+              {suggestionsOpen && suggestions.length > 0 && (
+                <div className="sl-autofill">
+                  {suggestions.map((item, idx) => (
+                    <button
+                      key={`${item.symbol}-${item.exchange}-${idx}`}
+                      className={`sl-autofill-item ${idx === suggestionIndex ? "on" : ""}`}
+                      onMouseEnter={() => setSuggestionIndex(idx)}
+                      onClick={() => selectSuggestion(item)}
+                    >
+                      <span style={{ display: "flex", alignItems: "center", minWidth: 0 }}>
+                        <span className="sl-autofill-symbol">{item.symbol}</span>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
+                      </span>
+                      <span className="sl-autofill-exch">{item.exchange}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="sl-hint">
               {quotesLoading
                 ? "Loading live prices…"
                 : quotesLive
-                  ? `${stocks.length} stocks · live prices · press / to search`
-                  : `${stocks.length} stocks · press / to search`}
+                  ? `${stocks.length} stocks · live prices · j/k navigate · Enter open · s star`
+                  : `${stocks.length} stocks · add with Enter · press / to search`}
             </div>
           </div>
 
-          <div className="sl-list">
-            {quotesLoading ? (
-              <SkeletonList />
-            ) : (
-              <>
-                {/* Local results */}
-                {localFiltered.map(s => {
-                  const { price: disp, converted } = convertPrice(s.price, s.exchange, currency, usdToCadRate);
-                  const dec      = disp != null && disp < 10 ? 3 : 2;
-                  const hasPrice = typeof disp === "number";
-                  const hasChg   = typeof s.change === "number";
-                  const priceStr = hasPrice ? `${converted ? "~$" : "$"}${fmt(disp, dec)}` : "—";
-                  const chgPos   = hasChg && s.change >= 0;
-                  const starred  = watchlist.includes(s.ticker);
+          <div className={`sl-content ${rightRail ? "with-rail" : ""}`}>
+            <div className="sl-main">
+              <div className="sl-head">
+                {renderSortHeader("Ticker", "ticker", "left")}
+                {renderSortHeader("Price", "price")}
+                {renderSortHeader("Change", "change")}
+                <div className="sl-sort-cap">{renderSortHeader("Mkt Cap", "mktCap")}</div>
+                <div />
+              </div>
 
-                  return (
-                    <div key={s.ticker} className="sl-row" onClick={() => onSelect(s)}>
-                      <div className="sl-row-left">
-                        <span className="sl-ticker">{s.ticker}</span>
-                        <span className="sl-name">{s.name}</span>
-                        <span className="sl-exch">{s.exchange}</span>
-                      </div>
-                      <div className="sl-row-right">
-                        <span className="sl-price">{priceStr}</span>
-                        <span className={`sl-chg ${hasChg ? (chgPos ? "pos" : "neg") : "neu"}`}>
-                          {hasChg ? `${chgPos ? "+" : ""}${fmt(s.change)}%` : "—"}
-                        </span>
-                        <span className="sl-cap">{fmtLarge(s.mktCap)}</span>
-                        <button
-                          className={`sl-star ${starred ? "on" : "off"}`}
-                          onClick={e => { e.stopPropagation(); onStarClick(s.ticker); }}
-                        >
-                          {starred ? "★" : "☆"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* No local results */}
-                {localFiltered.length === 0 && extResults === null && !extLoading && !showExtPrompt && (
+              <div className="sl-list">
+                {quotesLoading ? (
+                  <SkeletonList />
+                ) : localFiltered.length === 0 ? (
                   <div className="sl-empty">No results for "{search}"</div>
-                )}
+                ) : (
+                  localFiltered.map((s) => {
+                    const { price: disp, converted } = convertPrice(s.price, s.exchange, currency, usdToCadRate);
+                    const dec = disp != null && disp < 10 ? 3 : 2;
+                    const hasPrice = typeof disp === "number";
+                    const hasChg = typeof s.change === "number";
+                    const priceStr = hasPrice ? `${converted ? "~$" : "$"}${fmt(disp, dec)}` : "—";
+                    const chgPos = hasChg && s.change >= 0;
+                    const starred = watchlist.includes(s.ticker);
 
-                {/* Prompt to search all markets */}
-                {showExtPrompt && (
-                  <div className="sl-ext-prompt" onClick={runExternalSearch}>
-                    Search all markets for "{search}" →
-                  </div>
-                )}
-
-                {/* External search loading */}
-                {extLoading && (
-                  <div className="sl-ext-loading">Searching all markets…</div>
-                )}
-
-                {/* External search results */}
-                {extResults !== null && extResults.length === 0 && (
-                  <div className="sl-empty">No results for "{search}"</div>
-                )}
-                {extResults !== null && extResults.length > 0 && (
-                  <>
-                    <div className="sl-ext-header">All markets</div>
-                    {extResults.map(r => (
-                      <div key={r.symbol} className="sl-row" onClick={() => handleExtSelect(r)}>
+                    return (
+                      <div
+                        key={s.ticker}
+                        className={`sl-row ${activeTicker === s.ticker ? "active" : ""}`}
+                        onClick={() => onSelect(s)}
+                      >
                         <div className="sl-row-left">
-                          <span className="sl-ticker">{r.symbol}</span>
-                          <span className="sl-name">{r.name}</span>
-                          <span className="sl-exch">{r.exchange}</span>
+                          <span className="sl-ticker">{s.ticker}</span>
+                          <span className="sl-name">{s.name}</span>
+                          <span className="sl-exch">{s.exchange}</span>
                         </div>
                         <div className="sl-row-right">
-                          <span className="sl-ext-add">+ Add</span>
+                          <span className="sl-price">{priceStr}</span>
+                          <span className={`sl-chg ${hasChg ? (chgPos ? "pos" : "neg") : "neu"}`}>
+                            {hasChg ? `${chgPos ? "+" : ""}${fmt(s.change)}%` : "—"}
+                          </span>
+                          <span className="sl-cap">{fmtLarge(s.mktCap)}</span>
+                          <button
+                            className={`sl-star ${starred ? "on" : "off"}`}
+                            onClick={(e) => { e.stopPropagation(); onStarClick(s.ticker); }}
+                          >
+                            {starred ? "★" : "☆"}
+                          </button>
                         </div>
                       </div>
-                    ))}
-                  </>
+                    );
+                  })
                 )}
-              </>
-            )}
+              </div>
+            </div>
+
+            {rightRail && <aside className="sl-rail">{rightRail}</aside>}
           </div>
         </div>
       </div>

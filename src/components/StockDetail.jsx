@@ -52,6 +52,15 @@ const STYLE = `
     gap: 10px;
     margin-bottom: 6px;
   }
+  .sd-logo {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    object-fit: cover;
+    background: var(--surface-2);
+    flex-shrink: 0;
+  }
   .sd-ticker {
     font-family: var(--font-mono);
     font-size: 24px;
@@ -150,6 +159,14 @@ const STYLE = `
   .sd-divider { height: 1px; background: var(--border); }
 
   .sd-chart { padding: 20px 0; }
+  .sd-chart-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
   .sd-chart-label {
     font-family: var(--font-mono);
     font-size: 10px;
@@ -160,8 +177,40 @@ const STYLE = `
     display: flex;
     gap: 8px;
     align-items: center;
+    margin-bottom: 0;
   }
   .sd-live { color: var(--pos); }
+  .sd-ranges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .sd-range-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-3);
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 4px 9px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .sd-range-btn:hover { color: var(--text-2); border-color: var(--border-2); }
+  .sd-range-btn.on {
+    color: var(--accent);
+    border-color: rgba(232, 160, 32, 0.35);
+    background: rgba(232, 160, 32, 0.08);
+  }
+
+  .sd-desc {
+    padding-top: 14px;
+    color: var(--text-2);
+    font-size: 13px;
+    line-height: 1.6;
+    max-width: 72ch;
+  }
 
   .sd-metrics { padding: 20px 0; }
   .sd-metrics-grid {
@@ -274,6 +323,7 @@ export default function StockDetail({
   stock: s, onBack, watchlist, onStarClick,
   currency, usdToCadRate,
   candleData, supplementary,
+  profile, chartRange, onChartRangeChange,
 }) {
   if (!s) return null;
   const starred = watchlist.includes(s.ticker);
@@ -295,7 +345,10 @@ export default function StockDetail({
 
   // Technical indicators from 1-year price history
   const techs = calculateTechnicals(candleData);
-  const chartLabel = candleData && candleData.length > 60 ? "1-year price" : "30-day price";
+  const chartLabel = { "1mo": "1-month price", "3mo": "3-month price", "6mo": "6-month price", "1y": "1-year price" }[chartRange] ?? "Price";
+  const companyName = profile?.companyName ?? s.name;
+  const sector = profile?.sector ?? s.sector;
+  const description = profile?.description ?? "";
 
   return (
     <>
@@ -311,15 +364,16 @@ export default function StockDetail({
             <div className="sd-hero-row">
               <div>
                 <div className="sd-ticker-line">
+                  {profile?.logo && <img className="sd-logo" src={profile.logo} alt={`${s.ticker} logo`} />}
                   <span className="sd-ticker">{s.ticker}</span>
                   <button className={`sd-star ${starred ? "on" : ""}`} onClick={() => onStarClick(s.ticker)}>
                     {starred ? "★" : "☆"}
                   </button>
                 </div>
-                <div className="sd-company">{s.name}</div>
+                <div className="sd-company">{companyName}</div>
                 <div className="sd-chips">
                   <span className="sd-chip">{s.exchange}</span>
-                  <span className="sd-chip">{s.sector}</span>
+                  <span className="sd-chip">{sector}</span>
                 </div>
               </div>
 
@@ -347,14 +401,28 @@ export default function StockDetail({
                 <span className="sd-52w-label">52W</span>
               </div>
             )}
+            {description && <p className="sd-desc">{description}</p>}
           </div>
 
           <div className="sd-divider" />
 
           <div className="sd-chart">
-            <div className="sd-chart-label">
-              {chartLabel}
-              {candleData ? <span className="sd-live">live</span> : <span>unavailable</span>}
+            <div className="sd-chart-top">
+              <div className="sd-chart-label">
+                {chartLabel}
+                {candleData ? <span className="sd-live">live</span> : <span>unavailable</span>}
+              </div>
+              <div className="sd-ranges">
+                {["1mo", "3mo", "6mo", "1y"].map((range) => (
+                  <button
+                    key={range}
+                    className={`sd-range-btn ${chartRange === range ? "on" : ""}`}
+                    onClick={() => onChartRangeChange(range)}
+                  >
+                    {range}
+                  </button>
+                ))}
+              </div>
             </div>
             <AreaChart positive={chgPos} prices={candleData ?? null} width={772} height={140} />
           </div>
