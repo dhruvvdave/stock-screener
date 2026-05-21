@@ -40,6 +40,7 @@ export default async function handler(req, res) {
       open: quote.o,
       previousClose: quote.pc,
       timestamp: quote.t,
+      volume: quote.v ?? null,
     });
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : "Internal server error" });

@@ -14,17 +14,18 @@ export default async function handler(req, res) {
       ? `https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(finnhubSymbol)}&token=${key}`
       : null;
 
+    const FULL_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
     const requests = [
       fetch(yahooProfileUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0",
+          "User-Agent": FULL_UA,
           "Accept": "application/json, text/plain, */*",
           "Accept-Language": "en-US,en;q=0.9",
         },
       }),
       fetch(yahooQuoteUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0",
+          "User-Agent": FULL_UA,
           "Accept": "application/json, text/plain, */*",
           "Accept-Language": "en-US,en;q=0.9",
         },

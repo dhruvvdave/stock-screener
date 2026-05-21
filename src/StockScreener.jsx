@@ -8,6 +8,10 @@ import {
   fetchCompanyProfile,
   fetchExchangeRate,
   fetchSupplementaryQuotes,
+  fetchAnalystData,
+  fetchNewsSentiment,
+  fetchFundamentals,
+  fetchNews,
 } from "./data/api";
 import { fmt } from "./data/stocks";
 import { useLocalStorage } from "./hooks/useLocalStorage";
@@ -220,6 +224,7 @@ export default function StockScreener() {
   const [currency, setCurrency] = useLocalStorage("tickerly_currency", "USD");
 
   const [profiles, setProfiles] = useState({});
+  const [supplementaryData, setSupplementaryData] = useState(null);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [quotesLive, setQuotesLive] = useState(false);
   const [selectedTicker, setSelectedTicker] = useState(null);
@@ -396,6 +401,26 @@ export default function StockScreener() {
   }, [selectedStock, chartRange]);
 
   useEffect(() => {
+    if (!selectedStock) {
+      setSupplementaryData(null);
+      return;
+    }
+
+    let cancelled = false;
+    Promise.all([
+      fetchAnalystData(selectedStock.ticker, selectedStock.exchange),
+      fetchNewsSentiment(selectedStock.ticker, selectedStock.exchange),
+      fetchFundamentals(selectedStock.ticker, selectedStock.exchange),
+      fetchNews(selectedStock.ticker, selectedStock.exchange),
+    ]).then(([analyst, sentiment, fundamentals, news]) => {
+      if (!cancelled) setSupplementaryData({ analyst, sentiment, fundamentals, news });
+    });
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStock?.ticker]);
+
+  useEffect(() => {
     if (!stocks.length) return;
 
     const missing = stocks.filter(
@@ -436,6 +461,8 @@ export default function StockScreener() {
       if (event.key === "Escape" && selectedTicker) {
         event.preventDefault();
         setSelectedTicker(null);
+        setCandleData(null);
+        setHasActivatedUI(false);
         return;
       }
 
@@ -672,13 +699,13 @@ export default function StockScreener() {
         ) : selectedStock ? (
           <StockDetail
             stock={selectedStock}
-            onBack={() => { setSelectedTicker(null); setCandleData(null); }}
+            onBack={() => { setSelectedTicker(null); setCandleData(null); setHasActivatedUI(false); }}
             watchlist={watchlist}
             onStarClick={toggleWatch}
             currency={currency}
             usdToCadRate={usdToCadRate}
             candleData={candleData}
-            supplementary={null}
+            supplementary={supplementaryData}
             profile={profiles[selectedStock.ticker] ?? null}
             chartRange={chartRange}
             onChartRangeChange={setChartRange}

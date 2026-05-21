@@ -61,7 +61,11 @@ export async function fetchAllQuotes(stocksOrTickers) {
       if (typeof data?.price === "number") {
         result.set(ticker, {
           price:  data.price,
-          change: typeof data.change === "number" ? data.change : null,
+          change: typeof data.changePercent === "number"
+            ? data.changePercent
+            : typeof data.change === "number"
+              ? data.change
+              : null,
         });
       }
     } catch {
@@ -147,8 +151,19 @@ export async function fetchCompanyProfile(ticker, exchange = "") {
 
 // ── Technical indicators computed from price history ─────────────────────
 
+function computeEMA(prices, period) {
+  if (prices.length < period) return [];
+  const k = 2 / (period + 1);
+  const ema = [prices.slice(0, period).reduce((a, b) => a + b, 0) / period];
+  for (let i = period; i < prices.length; i++) {
+    ema.push(prices[i] * k + ema[ema.length - 1] * (1 - k));
+  }
+  return ema;
+}
+
 export function calculateTechnicals(prices) {
-  if (!Array.isArray(prices) || prices.length < 15) return { rsi: null, ma50: null, ma200: null };
+  const empty = { rsi: null, ma50: null, ma200: null, macd: null, macdSignal: null, bbUpper: null, bbLower: null, bbMid: null };
+  if (!Array.isArray(prices) || prices.length < 15) return empty;
   const n = prices.length;
 
   // Simple moving averages
@@ -175,13 +190,40 @@ export function calculateTechnicals(prices) {
   }
 
   const rsi = avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(1);
-  return { rsi, ma50, ma200 };
+
+  // MACD (12/26 EMA, 9-period signal line)
+  let macd = null, macdSignal = null;
+  if (n >= 26) {
+    const ema12 = computeEMA(prices, 12);
+    const ema26 = computeEMA(prices, 26);
+    // ema26[i] and ema12[i+14] both correspond to prices ending at index (25+i)
+    const macdLine = ema26.map((v, i) => ema12[i + 14] - v);
+    if (macdLine.length >= 9) {
+      const signalLine = computeEMA(macdLine, 9);
+      macd = +macdLine[macdLine.length - 1].toFixed(4);
+      macdSignal = +signalLine[signalLine.length - 1].toFixed(4);
+    }
+  }
+
+  // Bollinger Bands (20-day SMA ± 2 standard deviations)
+  let bbUpper = null, bbLower = null, bbMid = null;
+  if (n >= 20) {
+    const slice = prices.slice(-20);
+    const mean = slice.reduce((a, b) => a + b, 0) / 20;
+    const variance = slice.reduce((acc, v) => acc + (v - mean) ** 2, 0) / 20;
+    const sd = Math.sqrt(variance);
+    bbMid   = +mean.toFixed(2);
+    bbUpper = +(mean + 2 * sd).toFixed(2);
+    bbLower = +(mean - 2 * sd).toFixed(2);
+  }
+
+  return { rsi, ma50, ma200, macd, macdSignal, bbUpper, bbLower, bbMid };
 }
 
 // ── Analyst data via /api/analyst proxy (Finnhub, optional) ───────────────
 
-export async function fetchAnalystData(ticker) {
-  const symbol = FINNHUB_SYMBOLS[ticker] ?? ticker;
+export async function fetchAnalystData(ticker, exchange = "") {
+  const symbol = toFinnhubSymbol(ticker, exchange);
   try {
     const r = await fetch(`/api/analyst?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
@@ -193,12 +235,39 @@ export async function fetchAnalystData(ticker) {
 
 // ── News sentiment via /api/sentiment proxy (Finnhub, optional) ───────────
 
-export async function fetchNewsSentiment(ticker) {
-  const symbol = FINNHUB_SYMBOLS[ticker] ?? ticker;
+export async function fetchNewsSentiment(ticker, exchange = "") {
+  const symbol = toFinnhubSymbol(ticker, exchange);
   try {
     const r = await fetch(`/api/sentiment?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
     return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+// ── Company fundamentals via /api/fundamentals proxy (Yahoo, no key) ───────
+
+export async function fetchFundamentals(ticker, exchange = "") {
+  const symbol = toYahooSymbol(ticker, exchange);
+  try {
+    const r = await fetch(`/api/fundamentals?symbol=${encodeURIComponent(symbol)}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+// ── Recent news via /api/news proxy (Yahoo, no key) ─────────────────────────
+
+export async function fetchNews(ticker, exchange = "") {
+  const symbol = toYahooSymbol(ticker, exchange);
+  try {
+    const r = await fetch(`/api/news?symbol=${encodeURIComponent(symbol)}`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d.news ?? null;
   } catch {
     return null;
   }

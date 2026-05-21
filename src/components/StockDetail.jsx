@@ -3,6 +3,7 @@ import MomentumDots from "./MomentumDots";
 import AIInsights   from "./AIInsights";
 import { fmt, fmtLarge, volRatio, momentumScore } from "../data/stocks";
 import { convertPrice, calculateTechnicals } from "../data/api";
+import { useState } from "react";
 
 const STYLE = `
   .sd-page {
@@ -262,6 +263,39 @@ const STYLE = `
   .sd-bar  { border-radius: 2px; }
   .sd-analyst-meta { font-size: 11px; color: var(--text-3); line-height: 1.6; }
 
+  .sd-news-item {
+    border-top: 1px solid var(--border);
+    padding: 10px 0;
+  }
+  .sd-news-item:first-of-type { border-top: none; padding-top: 0; }
+  .sd-news-title {
+    font-size: 12px;
+    color: var(--text-1);
+    line-height: 1.5;
+    text-decoration: none;
+    display: block;
+    margin-bottom: 3px;
+  }
+  .sd-news-title:hover { color: var(--accent); }
+  .sd-news-meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-3);
+  }
+
+  .sd-expand-btn {
+    background: none;
+    border: none;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-3);
+    cursor: pointer;
+    padding: 6px 0 0;
+    letter-spacing: 0.04em;
+    transition: color 0.1s;
+  }
+  .sd-expand-btn:hover { color: var(--text-2); }
+
   @media (max-width: 640px) {
     .sd-price  { font-size: 26px; }
     .sd-ticker { font-size: 20px; }
@@ -313,6 +347,131 @@ function AnalystSection({ analyst, sentiment }) {
             News {Math.round(sentiment.bullish * 100)}% bullish
             {sentiment.articles > 0 && ` · ${sentiment.articles} articles/week`}
           </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function FinancialHealthSection({ fundamentals: f }) {
+  if (!f) return null;
+  const hasAny = [
+    f.forwardPE, f.pegRatio, f.shortRatio, f.shortPctFloat,
+    f.currentRatio, f.debtToEquity, f.freeCashFlow,
+    f.operatingMargins, f.profitMargins, f.returnOnEquity, f.returnOnAssets,
+  ].some(v => v != null);
+  if (!hasAny) return null;
+
+  const pct = v => v != null ? `${(v * 100).toFixed(1)}%` : "—";
+  const num = (v, dec = 2) => v != null ? fmt(v, dec) : "—";
+
+  return (
+    <>
+      <div className="sd-divider" />
+      <div className="sd-analyst">
+        <div className="sd-section-label">Financial Health</div>
+        <div className="sd-metrics-grid">
+          {f.forwardPE != null && (
+            <div className="sd-kv">
+              <span className="sd-k">Fwd P/E</span>
+              <span className="sd-v">{num(f.forwardPE, 1)}</span>
+            </div>
+          )}
+          {f.pegRatio != null && (
+            <div className="sd-kv">
+              <span className="sd-k">PEG</span>
+              <span className="sd-v">{num(f.pegRatio, 2)}</span>
+            </div>
+          )}
+          {f.currentRatio != null && (
+            <div className="sd-kv">
+              <span className="sd-k">Current Ratio</span>
+              <span className="sd-v">{num(f.currentRatio, 2)}</span>
+            </div>
+          )}
+          {f.debtToEquity != null && (
+            <div className="sd-kv">
+              <span className="sd-k">D/E</span>
+              <span className="sd-v">{num(f.debtToEquity, 2)}</span>
+            </div>
+          )}
+          {f.operatingMargins != null && (
+            <div className="sd-kv">
+              <span className="sd-k">Op Margin</span>
+              <span className="sd-v">{pct(f.operatingMargins)}</span>
+            </div>
+          )}
+          {f.profitMargins != null && (
+            <div className="sd-kv">
+              <span className="sd-k">Net Margin</span>
+              <span className="sd-v">{pct(f.profitMargins)}</span>
+            </div>
+          )}
+          {f.returnOnEquity != null && (
+            <div className="sd-kv">
+              <span className="sd-k">ROE</span>
+              <span className="sd-v">{pct(f.returnOnEquity)}</span>
+            </div>
+          )}
+          {f.returnOnAssets != null && (
+            <div className="sd-kv">
+              <span className="sd-k">ROA</span>
+              <span className="sd-v">{pct(f.returnOnAssets)}</span>
+            </div>
+          )}
+          {f.freeCashFlow != null && (
+            <div className="sd-kv">
+              <span className="sd-k">Free CF</span>
+              <span className="sd-v">{fmtLarge(f.freeCashFlow / 1e9)}</span>
+            </div>
+          )}
+          {f.shortRatio != null && (
+            <div className="sd-kv">
+              <span className="sd-k">Short Ratio</span>
+              <span className="sd-v">{num(f.shortRatio, 1)}</span>
+            </div>
+          )}
+          {f.shortPctFloat != null && (
+            <div className="sd-kv">
+              <span className="sd-k">Short Float</span>
+              <span className="sd-v">{pct(f.shortPctFloat)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function NewsSection({ news }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!news?.length) return null;
+  const visible = expanded ? news : news.slice(0, 3);
+
+  return (
+    <>
+      <div className="sd-divider" />
+      <div className="sd-analyst">
+        <div className="sd-section-label">Recent News</div>
+        {visible.map((item, i) => (
+          <div key={i} className="sd-news-item">
+            {item.link ? (
+              <a className="sd-news-title" href={item.link} target="_blank" rel="noopener noreferrer">
+                {item.title}
+              </a>
+            ) : (
+              <span className="sd-news-title" style={{ cursor: "default" }}>{item.title}</span>
+            )}
+            <div className="sd-news-meta">
+              {item.publisher}
+              {item.publishedAt && ` · ${new Date(item.publishedAt * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
+            </div>
+          </div>
+        ))}
+        {news.length > 3 && (
+          <button className="sd-expand-btn" onClick={() => setExpanded(e => !e)}>
+            {expanded ? "Show less" : `+${news.length - 3} more`}
+          </button>
         )}
       </div>
     </>
@@ -487,7 +646,7 @@ export default function StockDetail({
           </div>
 
           {/* Technical indicators */}
-          {(techs.rsi != null || techs.ma50 != null || techs.ma200 != null) && (
+          {(techs.rsi != null || techs.ma50 != null || techs.ma200 != null || techs.macd != null || techs.bbUpper != null) && (
             <>
               <div className="sd-divider" />
               <div className="sd-analyst">
@@ -537,6 +696,41 @@ export default function StockDetail({
                       <span className="sd-v">${fmt(techs.ma50, 2)}</span>
                     </div>
                   )}
+                  {techs.macd != null && techs.macdSignal != null && (
+                    <div className="sd-kv">
+                      <span className="sd-k">MACD</span>
+                      <span className="sd-v" style={{ color: techs.macd > techs.macdSignal ? "var(--pos)" : "var(--neg)" }}>
+                        {techs.macd > techs.macdSignal ? "▲ " : "▼ "}
+                        {fmt(Math.abs(techs.macd - techs.macdSignal), 3)}
+                      </span>
+                    </div>
+                  )}
+                  {techs.bbUpper != null && hasPrice && (() => {
+                    const bw = techs.bbUpper - techs.bbLower;
+                    const pctB = bw > 0 ? +((disp - techs.bbLower) / bw * 100).toFixed(1) : null;
+                    return (
+                      <>
+                        <div className="sd-kv">
+                          <span className="sd-k">BB Upper</span>
+                          <span className="sd-v">${fmt(techs.bbUpper, 2)}</span>
+                        </div>
+                        <div className="sd-kv">
+                          <span className="sd-k">BB Lower</span>
+                          <span className="sd-v">${fmt(techs.bbLower, 2)}</span>
+                        </div>
+                        {pctB !== null && (
+                          <div className="sd-kv">
+                            <span className="sd-k">%B</span>
+                            <span className="sd-v" style={{
+                              color: pctB > 100 ? "var(--neg)" : pctB < 0 ? "var(--pos)" : "var(--text-1)"
+                            }}>
+                              {pctB.toFixed(1)}%
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </>
@@ -546,6 +740,10 @@ export default function StockDetail({
             analyst={supplementary?.analyst ?? null}
             sentiment={supplementary?.sentiment ?? null}
           />
+
+          <FinancialHealthSection fundamentals={supplementary?.fundamentals ?? null} />
+
+          <NewsSection news={supplementary?.news ?? null} />
 
           <div className="sd-divider" />
           <div style={{ paddingTop: 20 }}>
