@@ -10,6 +10,28 @@ const STYLE = `
     flex-direction: column;
     overflow-y: auto;
   }
+  .sl-page.minimal .sl-container {
+    max-width: 680px;
+    min-height: 100svh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .sl-page.minimal .sl-hero {
+    width: 100%;
+    padding: 0;
+    text-align: center;
+  }
+  .sl-page.minimal .sl-brand-wrap {
+    justify-content: center;
+  }
+  .sl-page.minimal .sl-pill-wrap {
+    margin: 0 auto;
+  }
+  .sl-page.minimal .sl-title {
+    margin-bottom: 18px;
+  }
 
   .sl-container {
     max-width: 1120px;
@@ -413,6 +435,7 @@ export default function StockList({
   sort,
   onSortChange,
   rightRail,
+  minimalSplash = false,
 }) {
   const [search, setSearch] = useState("");
   const [remoteSuggestions, setRemoteSuggestions] = useState([]);
@@ -531,15 +554,15 @@ export default function StockList({
   return (
     <>
       <style>{STYLE}</style>
-      <div className="sl-page">
+      <div className={`sl-page ${minimalSplash ? "minimal" : ""}`}>
         <div className="sl-container">
           <div className="sl-hero">
             <div className="sl-brand-wrap">
               <TickerlyLogo />
-              <div className="sl-brand">Tickerly</div>
+              {!minimalSplash && <div className="sl-brand">Tickerly</div>}
             </div>
             <h1 className="sl-title">
-              Any ticker, instantly<span className="sl-cursor">_</span>
+              {minimalSplash ? "Tickerly" : <>Any ticker, instantly<span className="sl-cursor">_</span></>}
             </h1>
             <div className="sl-pill-wrap">
               <div className="sl-pill">
@@ -582,73 +605,77 @@ export default function StockList({
                 </div>
               )}
             </div>
-            <div className="sl-hint">
-              {quotesLoading
-                ? "Loading live prices…"
-                : quotesLive
-                  ? `${stocks.length} stocks · live prices · j/k navigate · Enter open · s star`
-                  : `${stocks.length} stocks · add with Enter · press / to search`}
-            </div>
+            {!minimalSplash && (
+              <div className="sl-hint">
+                {quotesLoading
+                  ? "Loading live prices…"
+                  : quotesLive
+                    ? `${stocks.length} stocks · live prices · j/k navigate · Enter open · s star`
+                    : `${stocks.length} stocks · add with Enter · press / to search`}
+              </div>
+            )}
           </div>
 
-          <div className={`sl-content ${rightRail ? "with-rail" : ""}`}>
-            <div className="sl-main">
-              <div className="sl-head">
-                {renderSortHeader("Ticker", "ticker", "left")}
-                {renderSortHeader("Price", "price")}
-                {renderSortHeader("Change", "change")}
-                <div className="sl-sort-cap">{renderSortHeader("Mkt Cap", "mktCap")}</div>
-                <div />
+          {!minimalSplash && (
+            <div className={`sl-content ${rightRail ? "with-rail" : ""}`}>
+              <div className="sl-main">
+                <div className="sl-head">
+                  {renderSortHeader("Ticker", "ticker", "left")}
+                  {renderSortHeader("Price", "price")}
+                  {renderSortHeader("Change", "change")}
+                  <div className="sl-sort-cap">{renderSortHeader("Mkt Cap", "mktCap")}</div>
+                  <div />
+                </div>
+
+                <div className="sl-list">
+                  {quotesLoading ? (
+                    <SkeletonList />
+                  ) : localFiltered.length === 0 ? (
+                    <div className="sl-empty">No results for "{search}"</div>
+                  ) : (
+                    localFiltered.map((s) => {
+                      const { price: disp, converted } = convertPrice(s.price, s.exchange, currency, usdToCadRate);
+                      const dec = disp != null && disp < 10 ? 3 : 2;
+                      const hasPrice = typeof disp === "number";
+                      const hasChg = typeof s.change === "number";
+                      const priceStr = hasPrice ? `${converted ? "~$" : "$"}${fmt(disp, dec)}` : "—";
+                      const chgPos = hasChg && s.change >= 0;
+                      const starred = watchlist.includes(s.ticker);
+
+                      return (
+                        <div
+                          key={s.ticker}
+                          className={`sl-row ${activeTicker === s.ticker ? "active" : ""}`}
+                          onClick={() => onSelect(s)}
+                        >
+                          <div className="sl-row-left">
+                            <span className="sl-ticker">{s.ticker}</span>
+                            <span className="sl-name">{s.name}</span>
+                            <span className="sl-exch">{s.exchange}</span>
+                          </div>
+                          <div className="sl-row-right">
+                            <span className="sl-price">{priceStr}</span>
+                            <span className={`sl-chg ${hasChg ? (chgPos ? "pos" : "neg") : "neu"}`}>
+                              {hasChg ? `${chgPos ? "+" : ""}${fmt(s.change)}%` : "—"}
+                            </span>
+                            <span className="sl-cap">{fmtLarge(s.mktCap)}</span>
+                            <button
+                              className={`sl-star ${starred ? "on" : "off"}`}
+                              onClick={(e) => { e.stopPropagation(); onStarClick(s.ticker); }}
+                            >
+                              {starred ? "★" : "☆"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
 
-              <div className="sl-list">
-                {quotesLoading ? (
-                  <SkeletonList />
-                ) : localFiltered.length === 0 ? (
-                  <div className="sl-empty">No results for "{search}"</div>
-                ) : (
-                  localFiltered.map((s) => {
-                    const { price: disp, converted } = convertPrice(s.price, s.exchange, currency, usdToCadRate);
-                    const dec = disp != null && disp < 10 ? 3 : 2;
-                    const hasPrice = typeof disp === "number";
-                    const hasChg = typeof s.change === "number";
-                    const priceStr = hasPrice ? `${converted ? "~$" : "$"}${fmt(disp, dec)}` : "—";
-                    const chgPos = hasChg && s.change >= 0;
-                    const starred = watchlist.includes(s.ticker);
-
-                    return (
-                      <div
-                        key={s.ticker}
-                        className={`sl-row ${activeTicker === s.ticker ? "active" : ""}`}
-                        onClick={() => onSelect(s)}
-                      >
-                        <div className="sl-row-left">
-                          <span className="sl-ticker">{s.ticker}</span>
-                          <span className="sl-name">{s.name}</span>
-                          <span className="sl-exch">{s.exchange}</span>
-                        </div>
-                        <div className="sl-row-right">
-                          <span className="sl-price">{priceStr}</span>
-                          <span className={`sl-chg ${hasChg ? (chgPos ? "pos" : "neg") : "neu"}`}>
-                            {hasChg ? `${chgPos ? "+" : ""}${fmt(s.change)}%` : "—"}
-                          </span>
-                          <span className="sl-cap">{fmtLarge(s.mktCap)}</span>
-                          <button
-                            className={`sl-star ${starred ? "on" : "off"}`}
-                            onClick={(e) => { e.stopPropagation(); onStarClick(s.ticker); }}
-                          >
-                            {starred ? "★" : "☆"}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+              {rightRail && <aside className="sl-rail">{rightRail}</aside>}
             </div>
-
-            {rightRail && <aside className="sl-rail">{rightRail}</aside>}
-          </div>
+          )}
         </div>
       </div>
     </>
