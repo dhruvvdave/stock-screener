@@ -453,6 +453,7 @@ export default function StockList({
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [suggestionIndex, setSuggestionIndex] = useState(-1);
   const inputRef = useRef(null);
+  const pillRef = useRef(null);
 
   const debouncedSearch = useDebounce(search, 260);
 
@@ -465,6 +466,17 @@ export default function StockList({
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
+  }, []);
+
+  useEffect(() => {
+    const h = (e) => {
+      if (pillRef.current && !pillRef.current.contains(e.target)) {
+        setSuggestionsOpen(false);
+        setSuggestionIndex(-1);
+      }
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
   const q = search.trim().toUpperCase();
@@ -575,7 +587,7 @@ export default function StockList({
             <h1 className="sl-title">
               {minimalSplash ? "Markr" : <>Any ticker, instantly<span className="sl-cursor">_</span></>}
             </h1>
-            <div className="sl-pill-wrap">
+            <div className="sl-pill-wrap" ref={pillRef}>
               <div className="sl-pill">
                 <span className="sl-pill-icon">/</span>
                 <input
@@ -584,7 +596,7 @@ export default function StockList({
                   type="text"
                   placeholder="Ticker or company name…"
                   value={search}
-                  onChange={(e) => { setSearch(e.target.value); setSuggestionsOpen(true); }}
+                  onChange={(e) => { setSearch(e.target.value); setSuggestionsOpen(!!e.target.value.trim()); }}
                   onFocus={() => search.trim() && setSuggestionsOpen(true)}
                   onKeyDown={handleInputKeyDown}
                   autoComplete="off"
