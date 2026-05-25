@@ -1,4 +1,4 @@
-// Yahoo Finance uses .TO suffix for TSX-listed stocks
+// Yahoo Finance uses .TO suffix for TSX stocks, .V for TSX-V (Venture exchange)
 export const YAHOO_SYMBOLS = {
   SHOP:    "SHOP.TO", CNQ:  "CNQ.TO",  RY:   "RY.TO",  TD:  "TD.TO",
   ATD:     "ATD.TO",  SU:   "SU.TO",   BCE:  "BCE.TO",  ENB: "ENB.TO",
