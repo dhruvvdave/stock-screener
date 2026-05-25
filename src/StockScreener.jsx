@@ -9,12 +9,10 @@ import {
   fetchExchangeRate,
   fetchSupplementaryQuotes,
   fetchAnalystData,
-  fetchNewsSentiment,
   fetchFundamentals,
   fetchNews,
   fetchMetrics,
-  fetchFMP,
-  fetchOverview,
+  fetchEnrich,
 } from "./data/api";
 import { fmt } from "./data/stocks";
 import { useLocalStorage } from "./hooks/useLocalStorage";
@@ -414,13 +412,18 @@ export default function StockScreener() {
     let cancelled = false;
     Promise.all([
       fetchAnalystData(selectedStock.ticker, selectedStock.exchange),
-      fetchNewsSentiment(selectedStock.ticker, selectedStock.exchange),
       fetchFundamentals(selectedStock.ticker, selectedStock.exchange),
       fetchNews(selectedStock.ticker, selectedStock.exchange),
-      fetchFMP(selectedStock.ticker, selectedStock.exchange),
-      fetchOverview(selectedStock.ticker, selectedStock.exchange),
-    ]).then(([analyst, sentiment, fundamentals, news, fmp, overview]) => {
-      if (!cancelled) setSupplementaryData({ analyst, sentiment, fundamentals, news, fmp, overview });
+      fetchEnrich(selectedStock.ticker, selectedStock.exchange),
+    ]).then(([analystData, fundamentals, news, enrich]) => {
+      if (!cancelled) setSupplementaryData({
+        analyst:     analystData,
+        sentiment:   analystData,  // same object — StockDetail reads .bullish/.bearish/.articles
+        fundamentals,
+        news,
+        fmp:         enrich?.fmp      ?? null,
+        overview:    enrich?.overview ?? null,
+      });
     });
 
     return () => { cancelled = true; };

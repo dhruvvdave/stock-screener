@@ -243,18 +243,6 @@ export async function fetchAnalystData(ticker, exchange = "") {
   }
 }
 
-// ── News sentiment via /api/sentiment proxy (Finnhub, optional) ───────────
-
-export async function fetchNewsSentiment(ticker, exchange = "") {
-  const symbol = toFinnhubSymbol(ticker, exchange);
-  try {
-    const r = await fetch(`/api/sentiment?symbol=${encodeURIComponent(symbol)}`);
-    if (!r.ok) return null;
-    return await r.json();
-  } catch {
-    return null;
-  }
-}
 
 // ── Finnhub stock metrics (fundamentals fallback, no Yahoo needed) ─────────
 
@@ -299,24 +287,12 @@ export async function fetchNews(ticker, exchange = "") {
   }
 }
 
-// ── FMP (Financial Modeling Prep) via /api/fmp proxy (needs FMP_KEY) ──────
+// ── FMP + Alpha Vantage via /api/enrich proxy (both optional) ────────────
 
-export async function fetchFMP(ticker, exchange = "") {
-  const symbol = toYahooSymbol(ticker, exchange); // FMP strips suffix server-side
+export async function fetchEnrich(ticker, exchange = "") {
+  const symbol = toYahooSymbol(ticker, exchange);
   try {
-    const r = await fetch(`/api/fmp?symbol=${encodeURIComponent(symbol)}`);
-    if (!r.ok) return null;
-    return await r.json();
-  } catch {
-    return null;
-  }
-}
-
-// ── Alpha Vantage overview via /api/overview proxy (needs AV_KEY) ─────────
-
-export async function fetchOverview(ticker, exchange = "") {
-  try {
-    const r = await fetch(`/api/overview?symbol=${encodeURIComponent(ticker)}`);
+    const r = await fetch(`/api/enrich?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
     return await r.json();
   } catch {
