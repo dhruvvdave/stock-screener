@@ -13,6 +13,8 @@ import {
   fetchFundamentals,
   fetchNews,
   fetchMetrics,
+  fetchFMP,
+  fetchOverview,
 } from "./data/api";
 import { fmt } from "./data/stocks";
 import { useLocalStorage } from "./hooks/useLocalStorage";
@@ -415,8 +417,10 @@ export default function StockScreener() {
       fetchNewsSentiment(selectedStock.ticker, selectedStock.exchange),
       fetchFundamentals(selectedStock.ticker, selectedStock.exchange),
       fetchNews(selectedStock.ticker, selectedStock.exchange),
-    ]).then(([analyst, sentiment, fundamentals, news]) => {
-      if (!cancelled) setSupplementaryData({ analyst, sentiment, fundamentals, news });
+      fetchFMP(selectedStock.ticker, selectedStock.exchange),
+      fetchOverview(selectedStock.ticker, selectedStock.exchange),
+    ]).then(([analyst, sentiment, fundamentals, news, fmp, overview]) => {
+      if (!cancelled) setSupplementaryData({ analyst, sentiment, fundamentals, news, fmp, overview });
     });
 
     return () => { cancelled = true; };
