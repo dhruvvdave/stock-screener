@@ -2,207 +2,6 @@ import { useState, useEffect } from "react";
 import { generateAIAnalysis } from "../data/api";
 import { fmt } from "../data/stocks";
 
-const STYLE = `
-  .ai-wrap {
-    padding: 20px 20px 28px;
-  }
-  .ai-hd {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-  }
-  .ai-title {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-3);
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-  }
-  .ai-gen-btn {
-    font-family: var(--font-ui);
-    font-size: 11px;
-    color: var(--accent);
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    transition: opacity 0.1s;
-    touch-action: manipulation;
-    white-space: nowrap;
-  }
-  .ai-gen-btn:hover:not(:disabled) { opacity: 0.7; }
-  .ai-gen-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-
-  /* API key input */
-  .ai-key-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 12px;
-  }
-  .ai-key-input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid var(--border-2);
-    color: var(--text-2);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    padding: 4px 0;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-  .ai-key-input::placeholder { color: var(--text-3); }
-  .ai-key-input:focus { border-color: var(--accent); }
-  .ai-key-save {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--text-3);
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    transition: color 0.1s;
-    white-space: nowrap;
-  }
-  .ai-key-save:hover { color: var(--text-1); }
-  .ai-key-clear {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--text-3);
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    transition: color 0.1s;
-  }
-  .ai-key-clear:hover { color: var(--neg); }
-  .ai-key-hint {
-    font-size: 10px;
-    color: var(--text-3);
-    margin-bottom: 12px;
-    line-height: 1.5;
-  }
-
-  .ai-signal-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-  .ai-signal {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-  }
-  .sig-buy   { color: var(--pos); }
-  .sig-sell  { color: var(--neg); }
-  .sig-hold  { color: var(--text-2); }
-  .sig-watch { color: var(--accent); }
-
-  .ai-sent {
-    font-size: 11px;
-    color: var(--text-3);
-  }
-  .sent-bullish { color: var(--pos); }
-  .sent-bearish { color: var(--neg); }
-  .sent-neutral { color: var(--text-2); }
-
-  .ai-summary {
-    font-size: 12px;
-    color: var(--text-1);
-    line-height: 1.65;
-    margin-bottom: 14px;
-  }
-
-  .ai-cases {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 16px;
-  }
-  .ai-case-hd {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    margin-bottom: 5px;
-  }
-  .bull-hd { color: var(--pos); }
-  .bear-hd { color: var(--neg); }
-  .ai-case-list { list-style: none; }
-  .ai-case-item {
-    font-size: 11px;
-    color: var(--text-2);
-    line-height: 1.5;
-    padding-left: 10px;
-    position: relative;
-    margin-bottom: 3px;
-  }
-  .ai-case-item::before { content: '·'; position: absolute; left: 0; color: var(--text-3); }
-
-  .ai-range-hd {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-3);
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-  .ai-range-track {
-    height: 2px;
-    background: var(--surface-4);
-    border-radius: 1px;
-    position: relative;
-    margin-bottom: 6px;
-  }
-  .ai-range-fill {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: var(--border-2);
-    border-radius: 1px;
-  }
-  .ai-range-now {
-    position: absolute;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--text-1);
-    top: -1.5px;
-    transform: translateX(-50%);
-  }
-  .ai-range-mid {
-    position: absolute;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--accent);
-    top: -2.5px;
-    transform: translateX(-50%);
-  }
-  .ai-range-nums {
-    display: flex;
-    justify-content: space-between;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .ai-error { font-size: 12px; color: var(--neg); line-height: 1.5; }
-
-  @keyframes ai-pulse { 0%,100%{opacity:0.35} 50%{opacity:0.6} }
-  .ai-skel {
-    height: 10px;
-    background: var(--surface-3);
-    border-radius: 2px;
-    margin-bottom: 8px;
-    animation: ai-pulse 1.6s ease-in-out infinite;
-  }
-`;
-
 const SIG_CLS   = { buy: "sig-buy", sell: "sig-sell", hold: "sig-hold", watch: "sig-watch" };
 const SIG_LABEL = { buy: "BUY", sell: "SELL", hold: "HOLD", watch: "WATCH" };
 const SENT_CLS  = { bullish: "sent-bullish", bearish: "sent-bearish", neutral: "sent-neutral" };
@@ -260,9 +59,7 @@ export default function AIInsights({ stock, analystData, sentiment }) {
   const hasResult = status === "done" && result;
 
   return (
-    <>
-      <style>{STYLE}</style>
-      <div className="ai-wrap">
+    <div className="ai-wrap">
         <div className="ai-hd">
           <span className="ai-title">AI Analysis</span>
           <button className="ai-gen-btn" onClick={generate} disabled={status === "loading"}>
@@ -273,7 +70,7 @@ export default function AIInsights({ stock, analystData, sentiment }) {
         {/* OpenAI key management */}
         {savedKey ? (
           <div className="ai-key-row">
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-3)", flex: 1 }}>
+            <span className="ai-key-display">
               OpenAI key ···{savedKey.slice(-4)}
             </span>
             <button className="ai-key-clear" onClick={clearKey} title="Remove key">✕</button>
@@ -385,7 +182,6 @@ export default function AIInsights({ stock, analystData, sentiment }) {
             </>
           );
         })()}
-      </div>
-    </>
+    </div>
   );
 }
