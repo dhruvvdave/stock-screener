@@ -293,7 +293,7 @@ export default function StockList({
                     const dec = disp != null && disp < 10 ? 3 : 2;
                     const hasPrice = typeof disp === "number";
                     const hasChg = typeof s.change === "number";
-                    const priceStr = hasPrice ? `${converted ? "~$" : "$"}${fmt(disp, dec)}` : "—";
+                    const priceStr = hasPrice ? `${converted ? "~$" : s._priceFromCandle ? "≈$" : "$"}${fmt(disp, dec)}` : "—";
                     const chgPos = hasChg && s.change >= 0;
                     const starred = watchlist.includes(s.ticker);
 

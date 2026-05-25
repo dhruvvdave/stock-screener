@@ -272,12 +272,23 @@ export default function StockScreener() {
     if (!selectedStock) return;
 
     let cancelled = false;
+    const ticker = selectedStock.ticker;
     fetchCandleData(selectedStock.ticker, selectedStock.exchange, chartRange).then((data) => {
-      if (!cancelled) setCandleData(data);
+      if (!cancelled) {
+        setCandleData(data);
+        const lastClose = data?.lastClose;
+        if (lastClose > 0) {
+          setStocks(prev => prev.map(s =>
+            s.ticker === ticker && s.price == null
+              ? { ...s, price: lastClose, _priceFromCandle: true }
+              : s
+          ));
+        }
+      }
     });
 
     return () => { cancelled = true; };
-  }, [selectedStock, chartRange]);
+  }, [selectedStock, chartRange, setStocks]);
 
   useEffect(() => {
     if (!selectedStock) {
@@ -289,6 +300,7 @@ export default function StockScreener() {
     setSupplementaryData(null);
     setSupplementaryLoading(true);
     let cancelled = false;
+    const ticker = selectedStock.ticker;
     Promise.all([
       fetchAnalystData(selectedStock.ticker, selectedStock.exchange),
       fetchFundamentals(selectedStock.ticker, selectedStock.exchange),
@@ -305,6 +317,21 @@ export default function StockScreener() {
           overview:    enrich?.overview ?? null,
         });
         setSupplementaryLoading(false);
+
+        const ov  = enrich?.overview ?? {};
+        const fmp = enrich?.fmp      ?? {};
+        setStocks(prev => prev.map(s => {
+          if (s.ticker !== ticker) return s;
+          const fill = {};
+          if (s.pe            == null) fill.pe            = fmp.peRatio      ?? ov.peRatio      ?? null;
+          if (s.beta          == null) fill.beta           = ov.beta                              ?? null;
+          if (s.high52w       == null) fill.high52w        = ov.high52w                           ?? null;
+          if (s.low52w        == null) fill.low52w         = ov.low52w                            ?? null;
+          if (s.dividendYield == null) fill.dividendYield  = ov.dividendYield                     ?? null;
+          if (!s.sector || s.sector === "—") fill.sector   = ov.sector                            ?? null;
+          Object.keys(fill).forEach(k => fill[k] == null && delete fill[k]);
+          return Object.keys(fill).length ? { ...s, ...fill } : s;
+        }));
       }
     }).catch(() => {
       if (!cancelled) setSupplementaryLoading(false);

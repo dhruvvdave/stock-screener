@@ -24,7 +24,7 @@ async function fetchYahooFallback(yahooSymbol) {
   for (const host of ["query1", "query2"]) {
     try {
       const r = await fetch(
-        `https://${host}.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(yahooSymbol)}&fields=regularMarketPrice,regularMarketChangePercent,regularMarketVolume`,
+        `https://${host}.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(yahooSymbol)}&fields=regularMarketPrice,regularMarketChangePercent,regularMarketVolume,regularMarketChange`,
         { headers }
       );
       if (!r.ok) continue;
@@ -76,7 +76,7 @@ export default async function handler(req, res) {
         symbol,
         price: yq.regularMarketPrice,
         changePercent: yq.regularMarketChangePercent ?? null,
-        change: null,
+        change: yq.regularMarketChange ?? null,
         volume: yq.regularMarketVolume ?? null,
       });
     }
