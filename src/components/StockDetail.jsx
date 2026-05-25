@@ -333,12 +333,13 @@ export default function StockDetail({
             </div>
 
             <div className="sd-price-block">
-              <div className="sd-price">{hasPrice ? `${converted ? "~" : ""}$${fmt(disp, dec)}` : "—"}</div>
+              <div className="sd-price">{hasPrice ? `${converted ? "~" : s._priceFromCandle ? "≈" : ""}$${fmt(disp, dec)}` : "—"}</div>
               <div className="sd-chg-row">
                 <span className={`sd-chg ${hasChg ? (chgPos ? "pos" : "neg") : ""}`}>
                   {hasChg ? `${chgPos ? "+" : ""}${fmt(s.change)}%` : "—"}
                 </span>
                 {converted && <span className="sd-ccy-note">{currency}</span>}
+                {s._priceFromCandle && <span className="sd-ccy-note" title="Price from latest chart close, not a live quote">est.</span>}
               </div>
             </div>
           </div>

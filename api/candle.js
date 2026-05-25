@@ -27,10 +27,18 @@ async function fetchStooqChart(finnhubSymbol, range) {
     const text = await r.text();
     const lines = text.trim().split("\n");
     if (lines.length < 2) return null;
-    const prices = lines.slice(1)
-      .map(line => { const p = parseFloat(line.split(",")[4]); return isNaN(p) ? null : p; })
-      .filter(v => v != null);
-    return prices.length >= 3 ? prices : null;
+    const rows = lines.slice(1).map(line => {
+      const cols = line.split(",");
+      return { h: parseFloat(cols[2]), l: parseFloat(cols[3]), c: parseFloat(cols[4]) };
+    }).filter(r => !isNaN(r.c));
+    if (rows.length < 3) return null;
+    const prices = rows.map(r => r.c);
+    const lastRow = rows[rows.length - 1];
+    return {
+      prices,
+      dayHigh: isNaN(lastRow.h) ? null : lastRow.h,
+      dayLow:  isNaN(lastRow.l) ? null : lastRow.l,
+    };
   } catch {
     return null;
   }
@@ -86,6 +94,7 @@ export default async function handler(req, res) {
             prices: d.c,
             ohlcv: d.c.map((c, i) => ({ o: d.o?.[i] ?? null, h: d.h?.[i] ?? null, l: d.l?.[i] ?? null, c, v: d.v?.[i] ?? null })),
             timestamps: d.t ?? null,
+            lastClose: d.c[d.c.length - 1],
             source: "finnhub",
           });
         }
@@ -96,13 +105,21 @@ export default async function handler(req, res) {
   // ── 2. Yahoo Finance (fallback — query1 then query2) ─────────────────────
   if (yahooSymbol) {
     const prices = await fetchYahooChart(yahooSymbol, range);
-    if (prices) return res.json({ prices, source: "yahoo" });
+    if (prices) return res.json({ prices, lastClose: prices[prices.length - 1], source: "yahoo" });
   }
 
   // ── 3. Stooq (second fallback — free, no key needed) ─────────────────────
   if (finnhubSymbol) {
-    const prices = await fetchStooqChart(finnhubSymbol, range);
-    if (prices) return res.json({ prices, source: "stooq" });
+    const stooq = await fetchStooqChart(finnhubSymbol, range);
+    if (stooq) {
+      return res.json({
+        prices:    stooq.prices,
+        lastClose: stooq.prices[stooq.prices.length - 1],
+        dayHigh:   stooq.dayHigh,
+        dayLow:    stooq.dayLow,
+        source:    "stooq",
+      });
+    }
   }
 
   // ── 4. Twelve Data (third fallback — needs TWELVE_DATA_KEY) ──────────────
@@ -121,7 +138,7 @@ export default async function handler(req, res) {
         const d = await r.json();
         if (Array.isArray(d.values) && d.values.length >= 3) {
           const prices = d.values.map(v => parseFloat(v.close)).filter(Boolean).reverse();
-          if (prices.length >= 3) return res.json({ prices, source: "twelvedata" });
+          if (prices.length >= 3) return res.json({ prices, lastClose: prices[prices.length - 1], source: "twelvedata" });
         }
       }
     } catch { /* fall through */ }
