@@ -82,7 +82,12 @@ export default async function handler(req, res) {
       if (r.ok) {
         const d = await r.json();
         if (d.s === "ok" && Array.isArray(d.c) && d.c.length >= 3) {
-          return res.json({ prices: d.c, timestamps: d.t ?? null, source: "finnhub" });
+          return res.json({
+            prices: d.c,
+            ohlcv: d.c.map((c, i) => ({ o: d.o?.[i] ?? null, h: d.h?.[i] ?? null, l: d.l?.[i] ?? null, c, v: d.v?.[i] ?? null })),
+            timestamps: d.t ?? null,
+            source: "finnhub",
+          });
         }
       }
     } catch { /* fall through */ }
@@ -98,6 +103,28 @@ export default async function handler(req, res) {
   if (finnhubSymbol) {
     const prices = await fetchStooqChart(finnhubSymbol, range);
     if (prices) return res.json({ prices, source: "stooq" });
+  }
+
+  // ── 4. Twelve Data (third fallback — needs TWELVE_DATA_KEY) ──────────────
+  const tdKey = process.env.TWELVE_DATA_KEY;
+  if (tdKey && finnhubSymbol) {
+    try {
+      // Twelve Data uses "TICKER:EXCHANGE" — reverse of Finnhub's "EXCHANGE:TICKER"
+      const tdSymbol = finnhubSymbol.includes(":")
+        ? finnhubSymbol.split(":").reverse().join(":")
+        : finnhubSymbol;
+      const outputsize = RANGE_DAYS[range] ?? 30;
+      const r = await fetch(
+        `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSymbol)}&interval=1day&outputsize=${outputsize}&apikey=${tdKey}`
+      );
+      if (r.ok) {
+        const d = await r.json();
+        if (Array.isArray(d.values) && d.values.length >= 3) {
+          const prices = d.values.map(v => parseFloat(v.close)).filter(Boolean).reverse();
+          if (prices.length >= 3) return res.json({ prices, source: "twelvedata" });
+        }
+      }
+    } catch { /* fall through */ }
   }
 
   return res.json({ prices: null });

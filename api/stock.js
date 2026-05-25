@@ -81,6 +81,26 @@ export default async function handler(req, res) {
       });
     }
 
+    // Last resort — Twelve Data price endpoint
+    const tdKey = globalThis.process?.env?.TWELVE_DATA_KEY;
+    if (tdKey) {
+      try {
+        const tdSymbol = symbol.includes(":")
+          ? symbol.split(":").reverse().join(":")
+          : symbol;
+        const r = await fetch(
+          `https://api.twelvedata.com/price?symbol=${encodeURIComponent(tdSymbol)}&apikey=${tdKey}`
+        );
+        if (r.ok) {
+          const d = await r.json();
+          const price = parseFloat(d.price);
+          if (!isNaN(price) && price > 0) {
+            return res.status(200).json({ symbol, price, changePercent: null, change: null, volume: null });
+          }
+        }
+      } catch { /* fall through */ }
+    }
+
     return res.status(404).json({ error: `No quote found for symbol ${symbol}` });
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : "Internal server error" });

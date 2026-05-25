@@ -285,15 +285,62 @@ export async function fetchFundamentals(ticker, exchange = "") {
 // ── Recent news via /api/news proxy (Yahoo, no key) ─────────────────────────
 
 export async function fetchNews(ticker, exchange = "") {
-  const symbol = toYahooSymbol(ticker, exchange);
+  const yahooSymbol   = toYahooSymbol(ticker, exchange);
+  const finnhubSymbol = toFinnhubSymbol(ticker, exchange);
   try {
-    const r = await fetch(`/api/news?symbol=${encodeURIComponent(symbol)}`);
+    const r = await fetch(
+      `/api/news?symbol=${encodeURIComponent(yahooSymbol)}&finnhubSymbol=${encodeURIComponent(finnhubSymbol)}`
+    );
     if (!r.ok) return null;
     const d = await r.json();
     return d.news ?? null;
   } catch {
     return null;
   }
+}
+
+// ── FMP (Financial Modeling Prep) via /api/fmp proxy (needs FMP_KEY) ──────
+
+export async function fetchFMP(ticker, exchange = "") {
+  const symbol = toYahooSymbol(ticker, exchange); // FMP strips suffix server-side
+  try {
+    const r = await fetch(`/api/fmp?symbol=${encodeURIComponent(symbol)}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+// ── Alpha Vantage overview via /api/overview proxy (needs AV_KEY) ─────────
+
+export async function fetchOverview(ticker, exchange = "") {
+  try {
+    const r = await fetch(`/api/overview?symbol=${encodeURIComponent(ticker)}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+// ── TradingView symbol mapping ─────────────────────────────────────────────
+
+export function toTVSymbol(ticker, exchange) {
+  const MAP = {
+    "TSX":    "TSX:",
+    "TSX-V":  "TSXV:",
+    "NYSE":   "NYSE:",
+    "NASDAQ": "NASDAQ:",
+    "AMEX":   "AMEX:",
+    "LSE":    "LSE:",
+    "ASX":    "ASX:",
+    "XETRA":  "XETRA:",
+    "NSE":    "NSE:",
+    "OTC":    "OTC:",
+  };
+  const prefix = MAP[exchange];
+  return prefix ? prefix + ticker : ticker;
 }
 
 // ── Currency conversion ────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import AreaChart    from "./AreaChart";
+import TVChart      from "./TVChart";
 import MomentumDots from "./MomentumDots";
 import AIInsights   from "./AIInsights";
 import { fmt, fmtLarge, volRatio, momentumScore } from "../data/stocks";
@@ -448,6 +448,79 @@ function FinancialHealthSection({ fundamentals: f }) {
   );
 }
 
+function IncomeStatementSection({ fmp, overview }) {
+  if (!fmp && !overview) return null;
+  const f = fmp    ?? {};
+  const o = overview ?? {};
+  const pick = (...vals) => vals.find(v => v != null) ?? null;
+
+  const revenue    = pick(f.revenueAnnual,   o.revenueTTM);
+  const netIncome  = f.netIncomeAnnual;
+  const grossMgn   = f.grossMargin;
+  const eps        = pick(f.epsAnnual,       o.eps);
+  const evEbitda   = pick(f.evToEbitda,      o.evToEbitda);
+  const ps         = pick(f.psRatio,         o.priceToSales);
+  const roic       = f.roic;
+  const fwdPE      = pick(f.peRatio,         o.forwardPE);
+  const target     = o.analystTarget;
+  const opMgn      = o.operatingMargin;
+  const profMgn    = o.profitMargin;
+  const roe        = o.roe;
+  const roa        = o.roa;
+
+  const hasAny = [revenue, netIncome, grossMgn, eps, evEbitda, ps, roic, target, opMgn, profMgn, roe, roa].some(v => v != null);
+  if (!hasAny) return null;
+
+  const KV = ({ k, v }) => (
+    <div className="sd-kv">
+      <span className="sd-k">{k}</span>
+      <span className="sd-v">{v}</span>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="sd-divider" />
+      <div className="sd-analyst">
+        <div className="sd-section-label">Income &amp; Valuation</div>
+        <div className="sd-metrics-grid">
+          {revenue   != null && <KV k="Revenue"      v={`$${fmt(revenue, 1)}B`} />}
+          {netIncome != null && <KV k="Net Income"   v={`$${fmt(netIncome, 2)}B`} />}
+          {grossMgn  != null && <KV k="Gross Margin" v={`${fmt(grossMgn, 1)}%`} />}
+          {eps       != null && <KV k="EPS"          v={`$${fmt(eps, 2)}`} />}
+          {opMgn     != null && <KV k="Op Margin"    v={`${fmt(opMgn, 1)}%`} />}
+          {profMgn   != null && <KV k="Net Margin"   v={`${fmt(profMgn, 1)}%`} />}
+          {roe       != null && <KV k="ROE"          v={`${fmt(roe, 1)}%`} />}
+          {roa       != null && <KV k="ROA"          v={`${fmt(roa, 1)}%`} />}
+          {evEbitda  != null && <KV k="EV/EBITDA"    v={fmt(evEbitda, 1)} />}
+          {ps        != null && <KV k="P/S Ratio"    v={fmt(ps, 2)} />}
+          {roic      != null && <KV k="ROIC"         v={`${fmt(roic, 1)}%`} />}
+          {fwdPE     != null && <KV k="Fwd P/E"      v={fmt(fwdPE, 1)} />}
+          {target    != null && <KV k="Analyst Target" v={`$${fmt(target, 2)}`} />}
+        </div>
+        {fmp?.earningsHistory?.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-3)", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              Quarterly Earnings
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px 12px" }}>
+              <span style={{ fontSize: 10, color: "var(--text-3)" }}>Period</span>
+              <span style={{ fontSize: 10, color: "var(--text-3)", textAlign: "right" }}>EPS</span>
+              <span style={{ fontSize: 10, color: "var(--text-3)", textAlign: "right" }}>Revenue</span>
+              {fmp.earningsHistory.map((q, i) => (
+                <><span key={`p${i}`} style={{ fontSize: 11, color: "var(--text-2)" }}>{q.period}</span>
+                  <span key={`e${i}`} style={{ fontSize: 11, color: "var(--text-1)", textAlign: "right" }}>${fmt(q.eps, 2)}</span>
+                  <span key={`r${i}`} style={{ fontSize: 11, color: "var(--text-1)", textAlign: "right" }}>${fmt(q.revenue / 1e9, 1)}B</span>
+                </>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 function NewsSection({ news }) {
   const [expanded, setExpanded] = useState(false);
   if (!news?.length) return null;
@@ -499,20 +572,30 @@ export default function StockDetail({
   const vr     = volRatio(s);
   const ms     = momentumScore(s);
 
-  // 52-week range in display currency
-  const { price: disp52Low }  = convertPrice(s.low52w,  s.exchange, currency, usdToCadRate);
-  const { price: disp52High } = convertPrice(s.high52w, s.exchange, currency, usdToCadRate);
+  // Merge data across all sources — first non-null wins
+  const pick = (...vals) => vals.find(v => v != null) ?? null;
+  const ov  = supplementary?.overview ?? {};
+  const fmp = supplementary?.fmp      ?? {};
+  const mergedPE      = pick(s.pe,          fmp.peRatio,    ov.peRatio);
+  const mergedBeta    = pick(s.beta,         ov.beta);
+  const mergedHigh52w = pick(s.high52w,      ov.high52w);
+  const mergedLow52w  = pick(s.low52w,       ov.low52w);
+  const mergedDivYld  = pick(s.dividendYield, ov.dividendYield);
+  const mergedSector  = pick(profile?.sector, s.sector, ov.sector);
+
+  // 52-week range in display currency (use merged values)
+  const { price: disp52Low }  = convertPrice(mergedLow52w,  s.exchange, currency, usdToCadRate);
+  const { price: disp52High } = convertPrice(mergedHigh52w, s.exchange, currency, usdToCadRate);
   const has52w = disp52Low != null && disp52High != null && disp52High > disp52Low;
   const pct52  = has52w && hasPrice
     ? Math.min(100, Math.max(0, (disp - disp52Low) / (disp52High - disp52Low) * 100))
     : null;
 
-  // Technical indicators from 1-year price history
+  // Technical indicators from price history
   const techs = calculateTechnicals(candleData);
-  const chartLabel = { "1mo": "1-month price", "3mo": "3-month price", "6mo": "6-month price", "1y": "1-year price" }[chartRange] ?? "Price";
   const companyName = profile?.companyName ?? s.name;
-  const sector = profile?.sector ?? s.sector;
-  const description = profile?.description ?? "";
+  const sector      = mergedSector;
+  const description = profile?.description ?? ov.description ?? "";
 
   return (
     <>
@@ -573,22 +656,11 @@ export default function StockDetail({
           <div className="sd-chart">
             <div className="sd-chart-top">
               <div className="sd-chart-label">
-                {chartLabel}
-                {candleData ? <span className="sd-live">live</span> : <span>unavailable</span>}
-              </div>
-              <div className="sd-ranges">
-                {["1mo", "3mo", "6mo", "1y"].map((range) => (
-                  <button
-                    key={range}
-                    className={`sd-range-btn ${chartRange === range ? "on" : ""}`}
-                    onClick={() => onChartRangeChange(range)}
-                  >
-                    {range}
-                  </button>
-                ))}
+                Live Chart
+                <span className="sd-live">live</span>
               </div>
             </div>
-            <AreaChart positive={chgPos} prices={candleData ?? null} width={772} height={140} />
+            <TVChart key={`${s.ticker}-${s.exchange}`} ticker={s.ticker} exchange={s.exchange} />
           </div>
 
           <div className="sd-divider" />
@@ -597,7 +669,7 @@ export default function StockDetail({
             <div className="sd-metrics-grid">
               <div className="sd-kv">
                 <span className="sd-k">P/E</span>
-                <span className="sd-v">{s.pe ? fmt(s.pe, 1) : "—"}</span>
+                <span className="sd-v">{mergedPE ? fmt(mergedPE, 1) : "—"}</span>
               </div>
               <div className="sd-kv">
                 <span className="sd-k">P/B</span>
@@ -605,7 +677,7 @@ export default function StockDetail({
               </div>
               <div className="sd-kv">
                 <span className="sd-k">Beta</span>
-                <span className="sd-v">{s.beta ? fmt(s.beta) : "—"}</span>
+                <span className="sd-v">{mergedBeta ? fmt(mergedBeta) : "—"}</span>
               </div>
               <div className="sd-kv">
                 <span className="sd-k">Mkt Cap</span>
@@ -638,7 +710,7 @@ export default function StockDetail({
               <div className="sd-kv">
                 <span className="sd-k">Div Yield</span>
                 <span className="sd-v">
-                  {s.dividendYield != null ? `${fmt(s.dividendYield, 2)}%` : "—"}
+                  {mergedDivYld != null ? `${fmt(mergedDivYld, 2)}%` : "—"}
                 </span>
               </div>
               <div className="sd-kv">
@@ -747,6 +819,11 @@ export default function StockDetail({
           />
 
           <FinancialHealthSection fundamentals={supplementary?.fundamentals ?? null} />
+
+          <IncomeStatementSection
+            fmp={supplementary?.fmp ?? null}
+            overview={supplementary?.overview ?? null}
+          />
 
           <NewsSection news={supplementary?.news ?? null} />
 
