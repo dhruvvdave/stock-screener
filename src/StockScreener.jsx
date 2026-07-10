@@ -88,15 +88,15 @@ export default function StockScreener() {
   const [currency, setCurrency] = useLocalStorage("tickerly_currency", "USD");
 
   const [profiles, setProfiles] = useState({});
-  const [supplementaryData, setSupplementaryData] = useState(null);
-  const [supplementaryLoading, setSupplementaryLoading] = useState(false);
+  // Detail-view data is keyed by ticker so a slow response for the previous
+  // stock can never bleed into the one currently on screen.
+  const [supplementary, setSupplementary] = useState(null);
+  const [candle, setCandle] = useState(null);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [quotesInitialized, setQuotesInitialized] = useState(false);
   const [quotesLive, setQuotesLive] = useState(false);
   const [selectedTicker, setSelectedTicker] = useState(null);
   const [hasActivatedUI, setHasActivatedUI] = useState(false);
-  const [chartRange, setChartRange] = useState("1mo");
-  const [candleData, setCandleData] = useState(null);
   const [sort, setSort] = useState({ key: "ticker", direction: "asc" });
   const [navIndex, setNavIndex] = useState(0);
   const [clock, setClock] = useState(formatClock());
@@ -119,6 +119,14 @@ export default function StockScreener() {
     () => stocks.find((s) => s.ticker === selectedTicker) ?? null,
     [selectedTicker, stocks]
   );
+  // Primitive deps for the detail-view fetch effects — depending on the
+  // selectedStock object itself would refetch on every 45s quote refresh.
+  const selTicker = selectedStock?.ticker ?? null;
+  const selExchange = selectedStock?.exchange ?? "";
+
+  const candleData = selTicker && candle?.ticker === selTicker ? candle.data : null;
+  const supplementaryData = selTicker && supplementary?.ticker === selTicker ? supplementary.data : null;
+  const supplementaryLoading = !!selTicker && supplementary?.ticker !== selTicker;
 
   const showToast = useCallback((msg) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -269,77 +277,69 @@ export default function StockScreener() {
   }, [refreshQuotes]);
 
   useEffect(() => {
-    if (!selectedStock) return;
+    if (!selTicker) return;
 
     let cancelled = false;
-    const ticker = selectedStock.ticker;
-    fetchCandleData(selectedStock.ticker, selectedStock.exchange, chartRange).then((data) => {
-      if (!cancelled) {
-        setCandleData(data);
-        const lastClose = data?.lastClose;
-        if (lastClose > 0) {
-          setStocks(prev => prev.map(s =>
-            s.ticker === ticker && s.price == null
-              ? { ...s, price: lastClose, _priceFromCandle: true }
-              : s
-          ));
-        }
+    fetchCandleData(selTicker, selExchange).then((data) => {
+      if (cancelled) return;
+      setCandle({ ticker: selTicker, data });
+
+      // Thinly traded tickers sometimes have no live quote at all;
+      // fall back to the latest chart close so the UI isn't blank.
+      const lastClose = data?.lastClose;
+      if (lastClose > 0) {
+        setStocks(prev => prev.map(s =>
+          s.ticker === selTicker && s.price == null
+            ? { ...s, price: lastClose, _priceFromCandle: true }
+            : s
+        ));
       }
     });
 
     return () => { cancelled = true; };
-  }, [selectedStock, chartRange, setStocks]);
+  }, [selTicker, selExchange, setStocks]);
 
   useEffect(() => {
-    if (!selectedStock) {
-      setSupplementaryData(null);
-      setSupplementaryLoading(false);
-      return;
-    }
+    if (!selTicker) return;
 
-    setSupplementaryData(null);
-    setSupplementaryLoading(true);
     let cancelled = false;
-    const ticker = selectedStock.ticker;
     Promise.all([
-      fetchAnalystData(selectedStock.ticker, selectedStock.exchange),
-      fetchFundamentals(selectedStock.ticker, selectedStock.exchange),
-      fetchNews(selectedStock.ticker, selectedStock.exchange),
-      fetchEnrich(selectedStock.ticker, selectedStock.exchange),
-    ]).then(([analystData, fundamentals, news, enrich]) => {
-      if (!cancelled) {
-        setSupplementaryData({
-          analyst:     analystData,
-          sentiment:   analystData,
+      fetchAnalystData(selTicker, selExchange),
+      fetchFundamentals(selTicker, selExchange),
+      fetchNews(selTicker, selExchange),
+      fetchEnrich(selTicker, selExchange),
+    ]).then(([analyst, fundamentals, news, enrich]) => {
+      if (cancelled) return;
+      setSupplementary({
+        ticker: selTicker,
+        data: {
+          analyst,
           fundamentals,
           news,
-          fmp:         enrich?.fmp      ?? null,
-          overview:    enrich?.overview ?? null,
-        });
-        setSupplementaryLoading(false);
+          fmp:      enrich?.fmp      ?? null,
+          overview: enrich?.overview ?? null,
+        },
+      });
 
-        const ov  = enrich?.overview ?? {};
-        const fmp = enrich?.fmp      ?? {};
-        setStocks(prev => prev.map(s => {
-          if (s.ticker !== ticker) return s;
-          const fill = {};
-          if (s.pe            == null) fill.pe            = fmp.peRatio      ?? ov.peRatio      ?? null;
-          if (s.beta          == null) fill.beta           = ov.beta                              ?? null;
-          if (s.high52w       == null) fill.high52w        = ov.high52w                           ?? null;
-          if (s.low52w        == null) fill.low52w         = ov.low52w                            ?? null;
-          if (s.dividendYield == null) fill.dividendYield  = ov.dividendYield                     ?? null;
-          if (!s.sector || s.sector === "—") fill.sector   = ov.sector                            ?? null;
-          Object.keys(fill).forEach(k => fill[k] == null && delete fill[k]);
-          return Object.keys(fill).length ? { ...s, ...fill } : s;
-        }));
-      }
-    }).catch(() => {
-      if (!cancelled) setSupplementaryLoading(false);
+      // Backfill list-level fields the quote feeds couldn't provide
+      const ov  = enrich?.overview ?? {};
+      const fmp = enrich?.fmp      ?? {};
+      setStocks(prev => prev.map(s => {
+        if (s.ticker !== selTicker) return s;
+        const fill = {};
+        if (s.pe            == null) fill.pe            = fmp.peRatio      ?? ov.peRatio      ?? null;
+        if (s.beta          == null) fill.beta           = ov.beta                              ?? null;
+        if (s.high52w       == null) fill.high52w        = ov.high52w                           ?? null;
+        if (s.low52w        == null) fill.low52w         = ov.low52w                            ?? null;
+        if (s.dividendYield == null) fill.dividendYield  = ov.dividendYield                     ?? null;
+        if (!s.sector || s.sector === "—") fill.sector   = ov.sector                            ?? null;
+        Object.keys(fill).forEach(k => fill[k] == null && delete fill[k]);
+        return Object.keys(fill).length ? { ...s, ...fill } : s;
+      }));
     });
 
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStock?.ticker]);
+  }, [selTicker, selExchange, setStocks]);
 
   useEffect(() => {
     if (!stocks.length) return;
@@ -411,7 +411,6 @@ export default function StockScreener() {
       if (event.key === "Escape" && selectedTicker) {
         event.preventDefault();
         setSelectedTicker(null);
-        setCandleData(null);
         setHasActivatedUI(false);
         return;
       }
@@ -646,7 +645,7 @@ export default function StockScreener() {
       ) : selectedStock ? (
         <StockDetail
           stock={selectedStock}
-          onBack={() => { setSelectedTicker(null); setCandleData(null); setHasActivatedUI(false); }}
+          onBack={() => { setSelectedTicker(null); setHasActivatedUI(false); }}
           watchlist={watchlist}
           onStarClick={toggleWatch}
           currency={currency}
@@ -655,8 +654,6 @@ export default function StockScreener() {
           supplementary={supplementaryData}
           supplementaryLoading={supplementaryLoading}
           profile={profiles[selectedStock.ticker] ?? null}
-          chartRange={chartRange}
-          onChartRangeChange={setChartRange}
         />
       ) : (
         <StockList

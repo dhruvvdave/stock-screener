@@ -13,7 +13,7 @@ function fmtEarnings(ts) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function AnalystSection({ analyst, sentiment, loading }) {
+function AnalystSection({ analyst, loading }) {
   if (loading && !analyst) {
     return (
       <>
@@ -61,10 +61,10 @@ function AnalystSection({ analyst, sentiment, loading }) {
             {highTarget && lowTarget && ` · range $${fmt(lowTarget, 2)}–$${fmt(highTarget, 2)}`}
           </div>
         )}
-        {sentiment?.bullish != null && (
+        {analyst.bullish != null && (
           <div className="sd-analyst-meta">
-            News {Math.round(sentiment.bullish * 100)}% bullish
-            {sentiment.articles > 0 && ` · ${sentiment.articles} articles/week`}
+            News {Math.round(analyst.bullish * 100)}% bullish
+            {analyst.articles > 0 && ` · ${analyst.articles} articles/week`}
           </div>
         )}
       </div>
@@ -267,7 +267,7 @@ export default function StockDetail({
   stock: s, onBack, watchlist, onStarClick,
   currency, usdToCadRate,
   candleData, supplementary, supplementaryLoading,
-  profile, chartRange, onChartRangeChange,
+  profile,
 }) {
   if (!s) return null;
   const starred = watchlist.includes(s.ticker);
@@ -296,7 +296,7 @@ export default function StockDetail({
     ? Math.min(100, Math.max(0, (disp - disp52Low) / (disp52High - disp52Low) * 100))
     : null;
 
-  const techs = calculateTechnicals(candleData);
+  const techs = calculateTechnicals(candleData?.prices);
   const hasAnyTechs = techs.rsi != null || techs.ma50 != null || techs.ma200 != null || techs.macd != null || techs.bbUpper != null;
   const companyName = profile?.companyName ?? s.name;
   const sector      = mergedSector;
@@ -524,7 +524,6 @@ export default function StockDetail({
 
         <AnalystSection
           analyst={supplementary?.analyst ?? null}
-          sentiment={supplementary?.sentiment ?? null}
           loading={supplementaryLoading}
         />
 
@@ -547,9 +546,9 @@ export default function StockDetail({
         <div className="sd-divider" />
         <div style={{ paddingTop: 20 }}>
           <AIInsights
+            key={s.ticker}
             stock={s}
             analystData={supplementary?.analyst ?? null}
-            sentiment={supplementary?.sentiment ?? null}
           />
         </div>
 

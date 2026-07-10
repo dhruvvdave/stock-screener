@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { generateAIAnalysis } from "../data/api";
 import { fmt } from "../data/stocks";
 
@@ -6,21 +6,16 @@ const SIG_CLS   = { buy: "sig-buy", sell: "sig-sell", hold: "sig-hold", watch: "
 const SIG_LABEL = { buy: "BUY", sell: "SELL", hold: "HOLD", watch: "WATCH" };
 const SENT_CLS  = { bullish: "sent-bullish", bearish: "sent-bearish", neutral: "sent-neutral" };
 
-const LS_KEY = "mktscan_openai_key";
+const LS_KEY = "markr_openai_key";
 
-export default function AIInsights({ stock, analystData, sentiment }) {
+// Mounted with key={ticker}, so all analysis state resets when the stock changes.
+export default function AIInsights({ stock, analystData }) {
   const [status,   setStatus]   = useState("idle");
   const [result,   setResult]   = useState(null);
   const [errMsg,   setErrMsg]   = useState("");
   const [savedKey, setSavedKey] = useState(() => localStorage.getItem(LS_KEY) ?? "");
   const [keyInput, setKeyInput] = useState("");
   const [showInput, setShowInput] = useState(false);
-
-  useEffect(() => {
-    setStatus("idle");
-    setResult(null);
-    setErrMsg("");
-  }, [stock?.ticker]);
 
   const saveKey = () => {
     const k = keyInput.trim();
@@ -41,7 +36,7 @@ export default function AIInsights({ stock, analystData, sentiment }) {
     setResult(null);
     setErrMsg("");
     try {
-      const r = await generateAIAnalysis(stock, analystData, sentiment, savedKey || undefined);
+      const r = await generateAIAnalysis(stock, analystData, savedKey || undefined);
       setResult(r);
       setStatus("done");
     } catch (e) {

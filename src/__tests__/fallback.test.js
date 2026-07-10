@@ -200,14 +200,27 @@ describe('fetchSupplementaryQuotes', () => {
 });
 
 describe('fetchCandleData', () => {
-  test('returns prices array on success', async () => {
-    fetch.mockResolvedValue(mockOk({ prices: [100, 102, 101, 105] }));
-    const prices = await fetchCandleData('AAPL', '', '1mo');
-    expect(prices).toEqual([100, 102, 101, 105]);
+  test('returns the full payload (prices, lastClose, source) on success', async () => {
+    fetch.mockResolvedValue(mockOk({ prices: [100, 102, 101, 105], lastClose: 105, source: 'yahoo' }));
+    const data = await fetchCandleData('AAPL', '', '1mo');
+    expect(data.prices).toEqual([100, 102, 101, 105]);
+    expect(data.lastClose).toBe(105);
+    expect(data.source).toBe('yahoo');
+  });
+
+  test('defaults to a 1y range so long-window indicators can compute', async () => {
+    fetch.mockResolvedValue(mockOk({ prices: [1, 2, 3] }));
+    await fetchCandleData('AAPL');
+    expect(fetch.mock.calls[0][0]).toContain('range=1y');
   });
 
   test('returns null when response contains no prices field', async () => {
     fetch.mockResolvedValue(mockOk({ prices: null }));
+    expect(await fetchCandleData('AAPL')).toBeNull();
+  });
+
+  test('returns null for an empty prices array', async () => {
+    fetch.mockResolvedValue(mockOk({ prices: [] }));
     expect(await fetchCandleData('AAPL')).toBeNull();
   });
 });

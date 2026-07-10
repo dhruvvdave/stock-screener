@@ -715,26 +715,6 @@ button { touch-action: manipulation; }
   letter-spacing: 0.04em;
 }
 .sd-live { color: var(--pos); }
-.sd-ranges { display: flex; align-items: center; gap: 6px; }
-.sd-range-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-3);
-  border-radius: 999px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 4px 9px;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
-}
-.sd-range-btn:hover { color: var(--text-2); border-color: var(--border-2); }
-.sd-range-btn.on {
-  color: var(--accent);
-  border-color: rgba(232, 160, 32, 0.35);
-  background: rgba(232, 160, 32, 0.08);
-  font-weight: 600;
-}
 
 .sd-desc {
   padding-top: 14px;
