@@ -229,7 +229,6 @@ describe('fetchCandleData', () => {
 
 describe('/api/stock handler — Finnhub → Yahoo → Twelve Data fallback chain', () => {
   const FINNHUB_URL = 'https://finnhub.io';
-  const YAHOO_URL   = 'https://query1.finance.yahoo.com';
   const TD_URL      = 'https://api.twelvedata.com';
 
   beforeEach(() => {

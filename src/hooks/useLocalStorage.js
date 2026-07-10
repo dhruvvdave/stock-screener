@@ -12,7 +12,9 @@ export function useLocalStorage(key, initial) {
   useEffect(() => {
     try {
       localStorage.setItem(key, JSON.stringify(value));
-    } catch {}
+    } catch {
+      // Quota exceeded or storage unavailable — keep the in-memory value
+    }
   }, [key, value]);
   return [value, setValue];
 }

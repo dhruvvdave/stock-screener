@@ -18,4 +18,13 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // Vercel serverless functions run on Node
+    files: ['api/**/*.js'],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    files: ['**/__tests__/**/*.js', '**/*.test.js'],
+    languageOptions: { globals: { ...globals.node, ...globals.jest } },
+  },
 ])

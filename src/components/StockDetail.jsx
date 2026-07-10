@@ -3,7 +3,13 @@ import MomentumDots from "./MomentumDots";
 import AIInsights   from "./AIInsights";
 import { fmt, fmtLarge, volRatio, momentumScore } from "../data/stocks";
 import { convertPrice, calculateTechnicals } from "../data/api";
-import { useState } from "react";
+import { Fragment, useState } from "react";
+
+function KV({ k, v }) {
+  return (
+    <div className="sd-kv"><span className="sd-k">{k}</span><span className="sd-v">{v}</span></div>
+  );
+}
 
 function fmtEarnings(ts) {
   if (!ts) return "—";
@@ -166,10 +172,6 @@ function IncomeStatementSection({ fmp, overview, loading }) {
   const hasAny = [revenue, netIncome, grossMgn, eps, evEbitda, ps, roic, target, opMgn, profMgn, roe, roa].some(v => v != null);
   if (!hasAny) return null;
 
-  const KV = ({ k, v }) => (
-    <div className="sd-kv"><span className="sd-k">{k}</span><span className="sd-v">{v}</span></div>
-  );
-
   return (
     <>
       <div className="sd-divider" />
@@ -197,12 +199,12 @@ function IncomeStatementSection({ fmp, overview, loading }) {
               <span className="sd-earn-hd">Period</span>
               <span className="sd-earn-hd right">EPS</span>
               <span className="sd-earn-hd right">Revenue</span>
-              {fmp.earningsHistory.map((q, i) => (
-                <>
-                  <span key={`p${i}`} className="sd-earn-period">{q.period}</span>
-                  <span key={`e${i}`} className="sd-earn-val">${fmt(q.eps, 2)}</span>
-                  <span key={`r${i}`} className="sd-earn-val">${fmt(q.revenue / 1e9, 1)}B</span>
-                </>
+              {fmp.earningsHistory.map((q) => (
+                <Fragment key={q.period}>
+                  <span className="sd-earn-period">{q.period}</span>
+                  <span className="sd-earn-val">${fmt(q.eps, 2)}</span>
+                  <span className="sd-earn-val">${fmt(q.revenue / 1e9, 1)}B</span>
+                </Fragment>
               ))}
             </div>
           </div>
