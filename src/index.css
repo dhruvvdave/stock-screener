@@ -76,6 +76,20 @@ button { touch-action: manipulation; }
 .neg     { color: var(--neg); }
 .c-accent { color: var(--accent); }
 
+:focus-visible {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 2px;
+}
+.sl-pill-input:focus-visible,
+.ts-input:focus-visible,
+.ai-key-input:focus-visible { outline: none; }
+
+/* ===== MomentumDots ===== */
+.m-dots { display: flex; gap: 3px; align-items: center; }
+.m-dot  { border-radius: 50%; background: var(--surface-3); }
+.m-dot.on  { background: var(--pos); }
+.m-dot.neg { background: var(--neg); }
+
 /* ===== Header ===== */
 .hdr {
   display: flex;
@@ -114,13 +128,19 @@ button { touch-action: manipulation; }
   user-select: none;
 }
 .hdr-ccy-sep { color: var(--text-3); }
+.hdr-ccy-on,
+.hdr-ccy-off {
+  background: none;
+  border: none;
+  font: inherit;
+  border-radius: 3px;
+  padding: 1px 3px;
+}
 .hdr-ccy-on  { color: var(--text-1); font-weight: 600; cursor: default; }
 .hdr-ccy-off {
   color: var(--text-3);
   cursor: pointer;
   transition: color 0.1s;
-  border-radius: 3px;
-  padding: 1px 3px;
 }
 .hdr-ccy-off:hover { color: var(--text-2); }
 
@@ -364,14 +384,21 @@ button { touch-action: manipulation; }
 .sl-main  { min-width: 0; }
 .sl-rail  { position: sticky; top: 62px; align-self: start; }
 
+/* Header mirrors the flex structure of .sl-row so columns line up */
 .sl-head {
-  display: grid;
-  grid-template-columns: 1fr 80px 80px 88px 30px;
-  gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 0 10px 8px;
   border-bottom: 1px solid var(--border);
   margin: 0 -10px 4px;
 }
+.sl-head-right { display: flex; align-items: center; gap: 14px; }
+.sl-sort-btn.w-price { min-width: 66px; }
+.sl-sort-btn.w-chg   { min-width: 54px; }
+.sl-sort-btn.w-cap   { min-width: 56px; }
+.sl-head-star { width: 21px; flex-shrink: 0; }
 .sl-sort-btn {
   border: none;
   background: none;
@@ -403,7 +430,8 @@ button { touch-action: manipulation; }
 .sl-row:hover { background: rgba(255,255,255,0.028); }
 .sl-row.active {
   background: var(--accent-dim);
-  border: 1px solid rgba(232, 160, 32, 0.20);
+  /* inset ring instead of a real border so the row height never shifts */
+  box-shadow: inset 0 0 0 1px rgba(232, 160, 32, 0.20);
 }
 
 .sl-row-left {
@@ -526,7 +554,6 @@ button { touch-action: manipulation; }
   .sl-name { max-width: 130px; }
   .sl-cap  { display: none; }
   .sl-exch { display: none; }
-  .sl-head { grid-template-columns: 1fr 80px 80px 30px; }
   .sl-head .sl-sort-cap { display: none; }
   .sl-hint { display: none; }
 }
@@ -715,26 +742,6 @@ button { touch-action: manipulation; }
   letter-spacing: 0.04em;
 }
 .sd-live { color: var(--pos); }
-.sd-ranges { display: flex; align-items: center; gap: 6px; }
-.sd-range-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-3);
-  border-radius: 999px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 4px 9px;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
-}
-.sd-range-btn:hover { color: var(--text-2); border-color: var(--border-2); }
-.sd-range-btn.on {
-  color: var(--accent);
-  border-color: rgba(232, 160, 32, 0.35);
-  background: rgba(232, 160, 32, 0.08);
-  font-weight: 600;
-}
 
 .sd-desc {
   padding-top: 14px;

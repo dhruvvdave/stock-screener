@@ -3,7 +3,13 @@ import MomentumDots from "./MomentumDots";
 import AIInsights   from "./AIInsights";
 import { fmt, fmtLarge, volRatio, momentumScore } from "../data/stocks";
 import { convertPrice, calculateTechnicals } from "../data/api";
-import { useState } from "react";
+import { Fragment, useState } from "react";
+
+function KV({ k, v }) {
+  return (
+    <div className="sd-kv"><span className="sd-k">{k}</span><span className="sd-v">{v}</span></div>
+  );
+}
 
 function fmtEarnings(ts) {
   if (!ts) return "—";
@@ -13,7 +19,7 @@ function fmtEarnings(ts) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function AnalystSection({ analyst, sentiment, loading }) {
+function AnalystSection({ analyst, loading }) {
   if (loading && !analyst) {
     return (
       <>
@@ -61,10 +67,10 @@ function AnalystSection({ analyst, sentiment, loading }) {
             {highTarget && lowTarget && ` · range $${fmt(lowTarget, 2)}–$${fmt(highTarget, 2)}`}
           </div>
         )}
-        {sentiment?.bullish != null && (
+        {analyst.bullish != null && (
           <div className="sd-analyst-meta">
-            News {Math.round(sentiment.bullish * 100)}% bullish
-            {sentiment.articles > 0 && ` · ${sentiment.articles} articles/week`}
+            News {Math.round(analyst.bullish * 100)}% bullish
+            {analyst.articles > 0 && ` · ${analyst.articles} articles/week`}
           </div>
         )}
       </div>
@@ -166,10 +172,6 @@ function IncomeStatementSection({ fmp, overview, loading }) {
   const hasAny = [revenue, netIncome, grossMgn, eps, evEbitda, ps, roic, target, opMgn, profMgn, roe, roa].some(v => v != null);
   if (!hasAny) return null;
 
-  const KV = ({ k, v }) => (
-    <div className="sd-kv"><span className="sd-k">{k}</span><span className="sd-v">{v}</span></div>
-  );
-
   return (
     <>
       <div className="sd-divider" />
@@ -197,12 +199,12 @@ function IncomeStatementSection({ fmp, overview, loading }) {
               <span className="sd-earn-hd">Period</span>
               <span className="sd-earn-hd right">EPS</span>
               <span className="sd-earn-hd right">Revenue</span>
-              {fmp.earningsHistory.map((q, i) => (
-                <>
-                  <span key={`p${i}`} className="sd-earn-period">{q.period}</span>
-                  <span key={`e${i}`} className="sd-earn-val">${fmt(q.eps, 2)}</span>
-                  <span key={`r${i}`} className="sd-earn-val">${fmt(q.revenue / 1e9, 1)}B</span>
-                </>
+              {fmp.earningsHistory.map((q) => (
+                <Fragment key={q.period}>
+                  <span className="sd-earn-period">{q.period}</span>
+                  <span className="sd-earn-val">${fmt(q.eps, 2)}</span>
+                  <span className="sd-earn-val">${fmt(q.revenue / 1e9, 1)}B</span>
+                </Fragment>
               ))}
             </div>
           </div>
@@ -267,7 +269,7 @@ export default function StockDetail({
   stock: s, onBack, watchlist, onStarClick,
   currency, usdToCadRate,
   candleData, supplementary, supplementaryLoading,
-  profile, chartRange, onChartRangeChange,
+  profile,
 }) {
   if (!s) return null;
   const starred = watchlist.includes(s.ticker);
@@ -296,7 +298,7 @@ export default function StockDetail({
     ? Math.min(100, Math.max(0, (disp - disp52Low) / (disp52High - disp52Low) * 100))
     : null;
 
-  const techs = calculateTechnicals(candleData);
+  const techs = calculateTechnicals(candleData?.prices);
   const hasAnyTechs = techs.rsi != null || techs.ma50 != null || techs.ma200 != null || techs.macd != null || techs.bbUpper != null;
   const companyName = profile?.companyName ?? s.name;
   const sector      = mergedSector;
@@ -524,7 +526,6 @@ export default function StockDetail({
 
         <AnalystSection
           analyst={supplementary?.analyst ?? null}
-          sentiment={supplementary?.sentiment ?? null}
           loading={supplementaryLoading}
         />
 
@@ -547,9 +548,9 @@ export default function StockDetail({
         <div className="sd-divider" />
         <div style={{ paddingTop: 20 }}>
           <AIInsights
+            key={s.ticker}
             stock={s}
             analystData={supplementary?.analyst ?? null}
-            sentiment={supplementary?.sentiment ?? null}
           />
         </div>
 

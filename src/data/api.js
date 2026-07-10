@@ -112,8 +112,11 @@ export async function fetchSupplementaryQuotes(stocks) {
 }
 
 // ── Candle/chart data via /api/candle proxy (Finnhub primary, Yahoo fallback)
+// Returns the full payload ({ prices, lastClose, source, ... }) — the prices
+// array feeds calculateTechnicals, lastClose backfills missing quotes, and
+// source is surfaced in the UI when a fallback provider served the data.
 
-export async function fetchCandleData(ticker, exchange = "", range = "1mo") {
+export async function fetchCandleData(ticker, exchange = "", range = "1y") {
   const yahooSymbol   = toYahooSymbol(ticker, exchange);
   const finnhubSymbol = toFinnhubSymbol(ticker, exchange);
   try {
@@ -122,7 +125,7 @@ export async function fetchCandleData(ticker, exchange = "", range = "1mo") {
     );
     if (!r.ok) return null;
     const d = await r.json();
-    return d.prices ?? null;
+    return Array.isArray(d.prices) && d.prices.length ? d : null;
   } catch {
     return null;
   }
@@ -333,20 +336,10 @@ export function convertPrice(price, exchange, displayCurrency, usdToCad) {
   return { price, converted: false };
 }
 
-export function filterBoundToNative(bound, exchange, displayCurrency, usdToCad) {
-  if (!bound) return null;
-  const cad = isCADExchange(exchange);
-  const n   = +bound;
-  if (displayCurrency === "CAD" && !cad) return n / usdToCad;
-  if (displayCurrency === "USD" &&  cad) return n * usdToCad;
-  return n;
-}
-
 // ── AI analysis via /api/analyze proxy (user supplies OpenAI key) ─────────
 
-export async function generateAIAnalysis(stock, analystData, sentiment, openaiKey) {
-  const a    = analystData ?? {};
-  const sent = sentiment ?? {};
+export async function generateAIAnalysis(stock, analystData, openaiKey) {
+  const a = analystData ?? {};
 
   const consensus = !a.total ? "unavailable"
     : a.buy  > a.hold && a.buy  > a.sell ? "Buy"
@@ -368,7 +361,7 @@ Market Cap: $${stock.mktCap}B
 
 Analysts: ${consensus}${a.total ? ` (${a.buy} buy / ${a.hold} hold / ${a.sell} sell, ${a.total} total)` : ""}
 ${a.meanTarget ? `Price target: $${a.meanTarget.toFixed(2)}${upside !== null ? ` (${upside > 0 ? "+" : ""}${upside}% upside)` : ""}, range $${a.lowTarget?.toFixed(2) ?? "?"} – $${a.highTarget?.toFixed(2) ?? "?"}` : "Price target: unavailable"}
-${sent.bullish != null ? `News: ${(sent.bullish * 100).toFixed(0)}% bullish, ${sent.articles} articles/week` : "News sentiment: unavailable"}
+${a.bullish != null ? `News: ${(a.bullish * 100).toFixed(0)}% bullish, ${a.articles} articles/week` : "News sentiment: unavailable"}
 
 Reply with this exact JSON:
 {
