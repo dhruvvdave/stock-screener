@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Header from "./components/Header";
 import StockList from "./components/StockList";
 import StockDetail from "./components/StockDetail";
+import TrackerRail from "./components/TrackerRail";
 import {
   fetchAllQuotes,
   fetchCandleData,
@@ -26,16 +27,6 @@ function formatClock(date = new Date()) {
     second: "2-digit",
     hour12: false,
   });
-}
-
-function formatEarnings(ts) {
-  if (!ts) return "—";
-  return new Date(ts * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function parseNumber(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
 }
 
 function sortStocks(stocks, sort) {
@@ -81,11 +72,11 @@ function createStockFromResult(result) {
 }
 
 export default function StockScreener() {
-  const [stocks, setStocks] = useLocalStorage("tickerly_stocks", []);
-  const [watchlist, setWatchlist] = useLocalStorage("tickerly_watchlist", []);
-  const [priceAlerts, setPriceAlerts] = useLocalStorage("tickerly_price_alerts", {});
-  const [portfolio, setPortfolio] = useLocalStorage("tickerly_portfolio", {});
-  const [currency, setCurrency] = useLocalStorage("tickerly_currency", "USD");
+  const [stocks, setStocks] = useLocalStorage("markr_stocks", []);
+  const [watchlist, setWatchlist] = useLocalStorage("markr_watchlist", []);
+  const [priceAlerts, setPriceAlerts] = useLocalStorage("markr_price_alerts", {});
+  const [portfolio, setPortfolio] = useLocalStorage("markr_portfolio", {});
+  const [currency, setCurrency] = useLocalStorage("markr_currency", "USD");
 
   const [profiles, setProfiles] = useState({});
   // Detail-view data is keyed by ticker so a slow response for the previous
@@ -102,7 +93,6 @@ export default function StockScreener() {
   const [clock, setClock] = useState(formatClock());
   const [nowTs, setNowTs] = useState(() => Math.floor(Date.now() / 1000));
   const [usdToCadRate, setUsdToCadRate] = useState(1.36);
-  const [portfolioTickerInput, setPortfolioTickerInput] = useState("");
   const [toast, setToast] = useState(null);
 
   const previousPricesRef = useRef({});
@@ -437,41 +427,6 @@ export default function StockScreener() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [clampedNavIndex, hasActivatedUI, selectedTicker, sortedStocks, toggleWatch]);
 
-  const trackedTickers = useMemo(() => Array.from(new Set([...watchlist, ...Object.keys(portfolio)])), [portfolio, watchlist]);
-
-  const watchlistStocks = useMemo(
-    () => watchlist.map((ticker) => stocks.find((s) => s.ticker === ticker)).filter(Boolean),
-    [stocks, watchlist]
-  );
-
-  const portfolioRows = useMemo(() => {
-    const rows = trackedTickers.map((ticker) => {
-      const stock = stocks.find((s) => s.ticker === ticker) ?? { ticker, price: null };
-      const entry = portfolio[ticker] ?? { shares: "", avgCost: "" };
-      const shares = parseNumber(entry.shares);
-      const avgCost = parseNumber(entry.avgCost);
-      const value = typeof stock.price === "number" ? stock.price * shares : 0;
-      const pl = typeof stock.price === "number" ? (stock.price - avgCost) * shares : 0;
-      return { ticker, shares, avgCost, value, pl, price: stock.price };
-    });
-
-    const totalValue = rows.reduce((acc, row) => acc + row.value, 0);
-    return rows.map((row) => ({
-      ...row,
-      allocation: totalValue > 0 ? (row.value / totalValue) * 100 : 0,
-    }));
-  }, [portfolio, stocks, trackedTickers]);
-
-  const earningsItems = useMemo(() => {
-    return trackedTickers
-      .map((ticker) => {
-        const stock = stocks.find((s) => s.ticker === ticker);
-        return stock?.earningsDate ? { ticker, earningsDate: stock.earningsDate } : null;
-      })
-      .filter((item) => item && item.earningsDate >= nowTs)
-      .sort((a, b) => a.earningsDate - b.earningsDate);
-  }, [nowTs, stocks, trackedTickers]);
-
   const updateAlert = useCallback((ticker, raw) => {
     setPriceAlerts((prev) => {
       if (!raw.trim()) {
@@ -495,122 +450,13 @@ export default function StockScreener() {
     }));
   }, [setPortfolio]);
 
-  const addPortfolioTicker = useCallback(() => {
-    const ticker = portfolioTickerInput.trim().toUpperCase();
-    if (!ticker) return;
+  const addPortfolioTicker = useCallback((ticker) => {
     setPortfolio((prev) => ({
       ...prev,
       [ticker]: prev[ticker] ?? { shares: "", avgCost: "" },
     }));
     addStock({ symbol: ticker, name: ticker, exchange: "US" });
-    setPortfolioTickerInput("");
-  }, [addStock, portfolioTickerInput, setPortfolio]);
-
-  const rightRail = (
-    <>
-      <div className="ts-rail-card">
-        <div className="ts-rail-title">Watchlist alerts</div>
-        {watchlistStocks.length === 0 ? (
-          <div className="ts-muted">Star stocks with "s" or ☆, then set price alert thresholds.</div>
-        ) : (
-          watchlistStocks.map((stock) => (
-            <div key={stock.ticker} className="ts-watch-row">
-              <div className="ts-watch-ticker">{stock.ticker}</div>
-              <div className="ts-watch-price">{typeof stock.price === "number" ? `$${fmt(stock.price, 2)}` : "—"}</div>
-              <input
-                className="ts-input"
-                value={priceAlerts[stock.ticker] ?? ""}
-                onChange={(e) => updateAlert(stock.ticker, e.target.value)}
-                placeholder={typeof stock.price === "number" ? `@ $${fmt(stock.price, 2)}` : "Alert $"}
-                inputMode="decimal"
-                aria-label={`${stock.ticker} alert price`}
-                title="Enter a price to receive a browser notification when crossed"
-              />
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="ts-rail-card">
-        <div className="ts-rail-title">Portfolio tracker</div>
-        <div className="ts-inline-form">
-          <input
-            className="ts-input"
-            value={portfolioTickerInput}
-            onChange={(e) => setPortfolioTickerInput(e.target.value)}
-            placeholder="Add ticker"
-            onKeyDown={(e) => e.key === "Enter" && addPortfolioTicker()}
-          />
-          <button className="ts-btn" onClick={addPortfolioTicker}>Add</button>
-        </div>
-
-        {portfolioRows.length === 0 ? (
-          <div className="ts-muted">Add tickers, then enter shares and average cost per share to track P/L.</div>
-        ) : (
-          <table className="ts-table">
-            <thead>
-              <tr>
-                <th>Ticker</th>
-                <th>Shares</th>
-                <th>Avg Cost</th>
-                <th>Value</th>
-                <th>P/L</th>
-                <th>Alloc%</th>
-              </tr>
-            </thead>
-            <tbody>
-              {portfolioRows.map((row) => (
-                <tr key={row.ticker}>
-                  <td className="ts-col-ticker">{row.ticker}</td>
-                  <td>
-                    <input
-                      className="ts-input"
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={portfolio[row.ticker]?.shares ?? ""}
-                      onChange={(e) => updatePortfolioField(row.ticker, "shares", e.target.value)}
-                      placeholder="0"
-                      aria-label={`${row.ticker} shares`}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="ts-input"
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={portfolio[row.ticker]?.avgCost ?? ""}
-                      onChange={(e) => updatePortfolioField(row.ticker, "avgCost", e.target.value)}
-                      placeholder="0"
-                      aria-label={`${row.ticker} average cost`}
-                    />
-                  </td>
-                  <td>${fmt(row.value, 2)}</td>
-                  <td className={row.pl >= 0 ? "ts-pos" : "ts-neg"}>{row.pl >= 0 ? "+" : ""}${fmt(row.pl, 2)}</td>
-                  <td>{fmt(row.allocation, 1)}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div className="ts-rail-card">
-        <div className="ts-rail-title">Upcoming earnings</div>
-        {earningsItems.length === 0 ? (
-          <div className="ts-muted">No upcoming earnings dates in your watchlist/portfolio yet.</div>
-        ) : (
-          earningsItems.map((item) => (
-            <div key={item.ticker} className="ts-earn-item">
-              <span className="ts-earn-ticker">{item.ticker}</span>
-              <span className="ts-earn-date">{formatEarnings(item.earningsDate)}</span>
-            </div>
-          ))
-        )}
-      </div>
-    </>
-  );
+  }, [addStock, setPortfolio]);
 
   return (
     <main className="ts-app">
@@ -626,24 +472,7 @@ export default function StockScreener() {
         />
       )}
 
-      {!hasActivatedUI ? (
-        <StockList
-          stocks={sortedStocks}
-          watchlist={watchlist}
-          onStarClick={toggleWatch}
-          onSelect={handleSelectStock}
-          onAddStock={addStock}
-          currency={currency}
-          usdToCadRate={usdToCadRate}
-          quotesLoading={quotesLoading}
-          quotesInitialized={quotesInitialized}
-          quotesLive={quotesLive}
-          activeTicker={activeTicker}
-          sort={sort}
-          onSortChange={onSortChange}
-          minimalSplash
-        />
-      ) : selectedStock ? (
+      {hasActivatedUI && selectedStock ? (
         <StockDetail
           stock={selectedStock}
           onBack={() => { setSelectedTicker(null); setHasActivatedUI(false); }}
@@ -671,7 +500,19 @@ export default function StockScreener() {
           activeTicker={activeTicker}
           sort={sort}
           onSortChange={onSortChange}
-          rightRail={rightRail}
+          minimalSplash={!hasActivatedUI}
+          rightRail={hasActivatedUI ? (
+            <TrackerRail
+              stocks={stocks}
+              watchlist={watchlist}
+              priceAlerts={priceAlerts}
+              onAlertChange={updateAlert}
+              portfolio={portfolio}
+              onPortfolioField={updatePortfolioField}
+              onAddPortfolioTicker={addPortfolioTicker}
+              nowTs={nowTs}
+            />
+          ) : undefined}
         />
       )}
 
