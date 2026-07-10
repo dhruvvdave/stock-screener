@@ -17,23 +17,33 @@ function MarkrLogo() {
 }
 
 function SkeletonList() {
-  return Array.from({ length: 14 }, (_, i) => (
-    <div key={i} className="sl-skel-row">
-      <div style={{ display: "flex", gap: 12, flex: 1, alignItems: "center" }}>
-        <div className="sl-skel-bar" style={{ width: 44, animationDelay: `${i * 35}ms` }} />
-        <div className="sl-skel-bar" style={{ width: 90 + (i % 4) * 30, animationDelay: `${i * 35 + 15}ms` }} />
-      </div>
-      <div style={{ display: "flex", gap: 14 }}>
-        <div className="sl-skel-bar" style={{ width: 58, animationDelay: `${i * 35 + 30}ms` }} />
-        <div className="sl-skel-bar" style={{ width: 44, animationDelay: `${i * 35 + 45}ms` }} />
-      </div>
+  return (
+    <div aria-hidden="true">
+      {Array.from({ length: 14 }, (_, i) => (
+        <div key={i} className="sl-skel-row">
+          <div style={{ display: "flex", gap: 12, flex: 1, alignItems: "center" }}>
+            <div className="sl-skel-bar" style={{ width: 44, animationDelay: `${i * 35}ms` }} />
+            <div className="sl-skel-bar" style={{ width: 90 + (i % 4) * 30, animationDelay: `${i * 35 + 15}ms` }} />
+          </div>
+          <div style={{ display: "flex", gap: 14 }}>
+            <div className="sl-skel-bar" style={{ width: 58, animationDelay: `${i * 35 + 30}ms` }} />
+            <div className="sl-skel-bar" style={{ width: 44, animationDelay: `${i * 35 + 45}ms` }} />
+          </div>
+        </div>
+      ))}
     </div>
-  ));
+  );
 }
 
 function sortArrow(sort, key) {
   if (sort.key !== key) return "";
   return sort.direction === "asc" ? " ↑" : " ↓";
+}
+
+function matchesQuery(stock, query) {
+  const q = query.trim();
+  if (!q) return true;
+  return stock.ticker.includes(q.toUpperCase()) || stock.name.toLowerCase().includes(q.toLowerCase());
 }
 
 function highlightMatch(text, query) {
@@ -73,6 +83,7 @@ export default function StockList({
   const [suggestionIndex, setSuggestionIndex] = useState(-1);
   const inputRef = useRef(null);
   const pillRef = useRef(null);
+  const listRef = useRef(null);
 
   const debouncedSearch = useDebounce(search, 260);
 
@@ -98,10 +109,18 @@ export default function StockList({
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const q = search.trim().toUpperCase();
-  const localFiltered = q
-    ? stocks.filter((s) => s.ticker.includes(q) || s.name.toLowerCase().includes(search.trim().toLowerCase()))
-    : stocks;
+  // Keep the j/k-selected row visible as it moves through a long list
+  useEffect(() => {
+    if (!activeTicker) return;
+    listRef.current
+      ?.querySelector(".sl-row.active")
+      ?.scrollIntoView({ block: "nearest" });
+  }, [activeTicker]);
+
+  const localFiltered = useMemo(
+    () => stocks.filter((s) => matchesQuery(s, search)),
+    [stocks, search]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -129,15 +148,14 @@ export default function StockList({
 
   const suggestions = useMemo(() => {
     if (!search.trim()) return [];
-    const locals = stocks
-      .filter((s) => s.ticker.includes(q) || s.name.toLowerCase().includes(search.trim().toLowerCase()))
+    const locals = localFiltered
       .slice(0, MAX_LOCAL_SUGGESTIONS)
       .map((s) => ({ symbol: s.ticker, name: s.name, exchange: s.exchange, local: true }));
 
     const seen = new Set(locals.map((s) => s.symbol));
     const remotes = remoteSuggestions.filter((s) => !seen.has(s.symbol)).slice(0, 6);
     return [...locals, ...remotes];
-  }, [q, remoteSuggestions, search, stocks]);
+  }, [localFiltered, remoteSuggestions, search]);
 
   const selectSuggestion = useCallback((result) => {
     onAddStock(result, { select: true });
@@ -199,6 +217,7 @@ export default function StockList({
 
   const showSkeleton = quotesLoading && !quotesInitialized;
   const showRefreshDot = quotesLoading && quotesInitialized;
+  const suggestionsVisible = suggestionsOpen && suggestions.length > 0;
 
   return (
     <div className={`sl-page ${minimalSplash ? "minimal" : ""}`}>
@@ -209,11 +228,11 @@ export default function StockList({
             {!minimalSplash && <div className="sl-brand">Markr</div>}
           </div>
           <h1 className="sl-title">
-            {minimalSplash ? "Markr" : <>Any ticker, instantly<span className="sl-cursor">_</span></>}
+            {minimalSplash ? "Markr" : <>Any ticker, instantly<span className="sl-cursor" aria-hidden="true">_</span></>}
           </h1>
           <div className="sl-pill-wrap" ref={pillRef}>
             <div className="sl-pill">
-              <span className="sl-pill-icon">/</span>
+              <span className="sl-pill-icon" aria-hidden="true">/</span>
               <input
                 ref={inputRef}
                 className="sl-pill-input"
@@ -225,19 +244,28 @@ export default function StockList({
                 onKeyDown={handleInputKeyDown}
                 autoComplete="off"
                 spellCheck="false"
+                role="combobox"
+                aria-label="Search tickers"
+                aria-expanded={suggestionsVisible}
+                aria-controls="sl-suggestions"
+                aria-activedescendant={suggestionIndex >= 0 ? `sl-suggestion-${suggestionIndex}` : undefined}
+                aria-autocomplete="list"
               />
               {search && (
-                <button className="sl-pill-clear" onClick={() => { setSearch(""); setSuggestionsOpen(false); }}>
+                <button className="sl-pill-clear" onClick={() => { setSearch(""); setSuggestionsOpen(false); }} aria-label="Clear search">
                   ✕
                 </button>
               )}
             </div>
 
-            {suggestionsOpen && suggestions.length > 0 && (
-              <div className="sl-autofill">
+            {suggestionsVisible && (
+              <div className="sl-autofill" id="sl-suggestions" role="listbox" aria-label="Ticker suggestions">
                 {suggestions.map((item, idx) => (
                   <button
                     key={`${item.symbol}-${item.exchange}-${idx}`}
+                    id={`sl-suggestion-${idx}`}
+                    role="option"
+                    aria-selected={idx === suggestionIndex}
                     className={`sl-autofill-item ${idx === suggestionIndex ? "on" : ""}`}
                     onMouseEnter={() => setSuggestionIndex(idx)}
                     onClick={() => selectSuggestion(item)}
@@ -277,7 +305,7 @@ export default function StockList({
                 <div />
               </div>
 
-              <div className="sl-list">
+              <div className="sl-list" ref={listRef}>
                 {showSkeleton ? (
                   <SkeletonList />
                 ) : stocks.length === 0 ? (
@@ -302,6 +330,15 @@ export default function StockList({
                         key={s.ticker}
                         className={`sl-row ${activeTicker === s.ticker ? "active" : ""}`}
                         onClick={() => onSelect(s)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onSelect(s);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${s.ticker} — ${s.name}, ${priceStr}`}
                       >
                         <div className="sl-row-left">
                           <span className="sl-ticker">{s.ticker}</span>

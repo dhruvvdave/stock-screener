@@ -523,6 +523,7 @@ export default function StockScreener() {
                 onChange={(e) => updateAlert(stock.ticker, e.target.value)}
                 placeholder={typeof stock.price === "number" ? `@ $${fmt(stock.price, 2)}` : "Alert $"}
                 inputMode="decimal"
+                aria-label={`${stock.ticker} alert price`}
                 title="Enter a price to receive a browser notification when crossed"
               />
             </div>
@@ -675,7 +676,7 @@ export default function StockScreener() {
       )}
 
       {toast && (
-        <div className="ts-toast" key={toast.key}>{toast.message}</div>
+        <div className="ts-toast" role="status" key={toast.key}>{toast.message}</div>
       )}
     </main>
   );

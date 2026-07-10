@@ -76,6 +76,20 @@ button { touch-action: manipulation; }
 .neg     { color: var(--neg); }
 .c-accent { color: var(--accent); }
 
+:focus-visible {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 2px;
+}
+.sl-pill-input:focus-visible,
+.ts-input:focus-visible,
+.ai-key-input:focus-visible { outline: none; }
+
+/* ===== MomentumDots ===== */
+.m-dots { display: flex; gap: 3px; align-items: center; }
+.m-dot  { border-radius: 50%; background: var(--surface-3); }
+.m-dot.on  { background: var(--pos); }
+.m-dot.neg { background: var(--neg); }
+
 /* ===== Header ===== */
 .hdr {
   display: flex;
@@ -114,13 +128,19 @@ button { touch-action: manipulation; }
   user-select: none;
 }
 .hdr-ccy-sep { color: var(--text-3); }
+.hdr-ccy-on,
+.hdr-ccy-off {
+  background: none;
+  border: none;
+  font: inherit;
+  border-radius: 3px;
+  padding: 1px 3px;
+}
 .hdr-ccy-on  { color: var(--text-1); font-weight: 600; cursor: default; }
 .hdr-ccy-off {
   color: var(--text-3);
   cursor: pointer;
   transition: color 0.1s;
-  border-radius: 3px;
-  padding: 1px 3px;
 }
 .hdr-ccy-off:hover { color: var(--text-2); }
 
@@ -403,7 +423,8 @@ button { touch-action: manipulation; }
 .sl-row:hover { background: rgba(255,255,255,0.028); }
 .sl-row.active {
   background: var(--accent-dim);
-  border: 1px solid rgba(232, 160, 32, 0.20);
+  /* inset ring instead of a real border so the row height never shifts */
+  box-shadow: inset 0 0 0 1px rgba(232, 160, 32, 0.20);
 }
 
 .sl-row-left {
