@@ -384,14 +384,21 @@ button { touch-action: manipulation; }
 .sl-main  { min-width: 0; }
 .sl-rail  { position: sticky; top: 62px; align-self: start; }
 
+/* Header mirrors the flex structure of .sl-row so columns line up */
 .sl-head {
-  display: grid;
-  grid-template-columns: 1fr 80px 80px 88px 30px;
-  gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 0 10px 8px;
   border-bottom: 1px solid var(--border);
   margin: 0 -10px 4px;
 }
+.sl-head-right { display: flex; align-items: center; gap: 14px; }
+.sl-sort-btn.w-price { min-width: 66px; }
+.sl-sort-btn.w-chg   { min-width: 54px; }
+.sl-sort-btn.w-cap   { min-width: 56px; }
+.sl-head-star { width: 21px; flex-shrink: 0; }
 .sl-sort-btn {
   border: none;
   background: none;
@@ -547,7 +554,6 @@ button { touch-action: manipulation; }
   .sl-name { max-width: 130px; }
   .sl-cap  { display: none; }
   .sl-exch { display: none; }
-  .sl-head { grid-template-columns: 1fr 80px 80px 30px; }
   .sl-head .sl-sort-cap { display: none; }
   .sl-hint { display: none; }
 }

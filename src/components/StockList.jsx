@@ -299,10 +299,12 @@ export default function StockList({
             <div className="sl-main">
               <div className="sl-head">
                 {renderSortHeader("Ticker", "ticker", "left")}
-                {renderSortHeader("Price", "price")}
-                {renderSortHeader("Change", "change")}
-                <div className="sl-sort-cap">{renderSortHeader("Mkt Cap", "mktCap")}</div>
-                <div />
+                <div className="sl-head-right">
+                  {renderSortHeader("Price", "price", "w-price")}
+                  {renderSortHeader("Change", "change", "w-chg")}
+                  <span className="sl-sort-cap">{renderSortHeader("Mkt Cap", "mktCap", "w-cap")}</span>
+                  <span className="sl-head-star" aria-hidden="true" />
+                </div>
               </div>
 
               <div className="sl-list" ref={listRef}>

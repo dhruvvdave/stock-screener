@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Fixed
+- Technical indicators section never rendered: `fetchCandleData` stripped the
+  API payload down to a bare prices array while consumers expected the full
+  `{ prices, lastClose, source }` object. This also broke the chart-close
+  price fallback for thinly traded tickers and the chart source label.
+- Candles now fetch a 1y window so MA50/MA200 and MACD have enough history
+  to compute (a 1mo window tops out around 22 daily closes).
+- Detail-view fetches no longer refire on every 45s quote refresh, and a slow
+  response for a previously viewed stock can't overwrite the current one.
+- Active-row highlight no longer shifts the row height by 2px during j/k
+  navigation (inset ring instead of a swapped border).
+
+### Changed
+- Keyboard accessibility pass: currency toggle is real buttons, list rows are
+  focusable and respond to Enter/Space, search has combobox semantics, toasts
+  announce via `role="status"`, and the j/k selection scrolls into view.
+- Right rail (watchlist alerts, portfolio, earnings) extracted into
+  `TrackerRail`; localStorage keys unified under `markr_*` with a one-time
+  migration from the legacy `tickerly_*`/`mktscan_*` names.
+- ESLint runs clean: Node globals scoped to `api/`, Jest globals to tests,
+  and the real component-level findings (components created during render,
+  unkeyed fragments, state resets in effects) fixed.
+
+### Removed
+- Dead code from earlier iterations: `Sparkline`, `AreaChart`, `useCountUp`,
+  filter presets, sector constants, and unused assets.
+
 ### Added
 - Multi-source candle data fallback (Finnhub → Yahoo → Stooq → Twelve Data)
 - Technical indicators computed from price history: RSI(14), MACD(12/26/9), Bollinger Bands(20), MA50, MA200
@@ -17,10 +44,5 @@
 - Keyboard navigation: j/k move list, Enter opens detail, s stars ticker, Esc returns
 - TradingView embedded chart replacing sparkline-only view
 
-### Fixed
-- TSX-V exchange symbol mapping (.V suffix for Yahoo, TSXV: prefix for Finnhub)
-- Yahoo Finance query1/query2 host fallback for quote and chart endpoints
-
 ### Known issues
 - Hardcoded YAHOO_SYMBOLS map needs replacing with dynamic resolution
-- Pre-existing ESLint errors in component files

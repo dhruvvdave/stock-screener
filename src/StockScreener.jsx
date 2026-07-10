@@ -87,7 +87,9 @@ export default function StockScreener() {
   const [quotesInitialized, setQuotesInitialized] = useState(false);
   const [quotesLive, setQuotesLive] = useState(false);
   const [selectedTicker, setSelectedTicker] = useState(null);
-  const [hasActivatedUI, setHasActivatedUI] = useState(false);
+  // The splash is a first-run state; returning users with a saved list
+  // land straight on it.
+  const [hasActivatedUI, setHasActivatedUI] = useState(() => stocks.length > 0);
   const [sort, setSort] = useState({ key: "ticker", direction: "asc" });
   const [navIndex, setNavIndex] = useState(0);
   const [clock, setClock] = useState(formatClock());
@@ -401,7 +403,6 @@ export default function StockScreener() {
       if (event.key === "Escape" && selectedTicker) {
         event.preventDefault();
         setSelectedTicker(null);
-        setHasActivatedUI(false);
         return;
       }
 
@@ -475,7 +476,7 @@ export default function StockScreener() {
       {hasActivatedUI && selectedStock ? (
         <StockDetail
           stock={selectedStock}
-          onBack={() => { setSelectedTicker(null); setHasActivatedUI(false); }}
+          onBack={() => setSelectedTicker(null)}
           watchlist={watchlist}
           onStarClick={toggleWatch}
           currency={currency}
