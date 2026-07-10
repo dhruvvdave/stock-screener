@@ -333,15 +333,6 @@ export function convertPrice(price, exchange, displayCurrency, usdToCad) {
   return { price, converted: false };
 }
 
-export function filterBoundToNative(bound, exchange, displayCurrency, usdToCad) {
-  if (!bound) return null;
-  const cad = isCADExchange(exchange);
-  const n   = +bound;
-  if (displayCurrency === "CAD" && !cad) return n / usdToCad;
-  if (displayCurrency === "USD" &&  cad) return n * usdToCad;
-  return n;
-}
-
 // ── AI analysis via /api/analyze proxy (user supplies OpenAI key) ─────────
 
 export async function generateAIAnalysis(stock, analystData, sentiment, openaiKey) {
