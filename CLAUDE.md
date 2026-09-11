@@ -16,6 +16,11 @@ npm run build           # production build to dist/
 npm run lint            # eslint . — currently clean, keep it that way
 npm test                # jest --config jest.config.cjs — 32 tests, all passing
 
+# Backend tests
+pip install -r backend/requirements-dev.txt
+pytest                                       # db-backed tests skip without a DSN
+MARKR_TEST_DSN=postgresql+asyncpg://markr:markr@localhost:5432/markr_test pytest
+
 # Backend + infrastructure
 docker-compose up       # Redis :6379, Postgres :5432 (markr/markr/markr), FastAPI :8000
 docker-compose down     # stop
@@ -136,21 +141,48 @@ step uses whichever it understands.
 
 `price_history` is declared in `backend/services/db.py` as `PARTITION BY RANGE
 (timestamp)` with composite primary key `(id, timestamp)` — Postgres requires the
-partition key in the PK. SQLAlchemy's `PriceHistory` model maps the parent table only;
-partition DDL is raw SQL in `PARTITION_DDL` plus a loop in `init_db()`.
+partition key in the PK. SQLAlchemy's `PriceHistory` model maps the parent table only.
 
-`init_db()` creates the current month and the next two, and runs once from the
-`startup` hook. Partitions past that have to be created by hand.
+`PARENT_TABLE_DDL` is a **tuple of single statements**, not one string. asyncpg uses
+the extended query protocol and rejects more than one command per prepared statement
+("cannot insert multiple commands into a prepared statement"). Keep one statement per
+entry or startup breaks at runtime.
 
-Writes are fire-and-forget: `fire_and_forget_write()` schedules the insert with
-`asyncio.ensure_future` and the request returns without waiting. Combined with the
-`try/except` around `init_db()` in `main.py` (which logs a **warning** and continues),
-this means a write landing outside every existing partition fails invisibly — the
-endpoint still returns 200 and `/history` just returns fewer rows. Treat any change
-here as needing a loud failure path.
+The monthly partitions underneath the parent are managed by
+`backend/services/partitions.py`:
 
-`backend/services/db.py` uses the deprecated `datetime.utcnow()`; the Dockerfile
-targets Python 3.12.
+- `partition_window(today, months_back, months_forward)` is pure — date arithmetic
+  only, no database. Test window behaviour here.
+- `ensure_partitions(engine, ...)` creates whatever is missing, one transaction per
+  partition, and returns a `PartitionRunResult` (`created` / `existing` / `failed` /
+  `skipped`). Idempotent by existence check plus `IF NOT EXISTS`, with SQLSTATE 42P07
+  treated as success for the check-then-create race.
+- A session-level advisory lock (`ADVISORY_LOCK_KEY`) serialises the pass across
+  replicas. A replica that cannot take the lock **skips** — that is success, not
+  failure, because the holder is creating the identical window.
+- `PartitionMaintainer` runs the pass at startup and every
+  `partition_refresh_hours`, and holds the last outcome for `/metrics`.
+
+The window is only ever extended. Nothing drops or detaches aged-out partitions —
+that would delete price history. Retention is an open decision, not an oversight.
+
+`months_back` defaults to **24** because `/api/candle?range=2y` writes every bar it
+fetched, so one request can insert rows two years old. A shorter back window silently
+drops the oldest rows of a backfill. If the candle ranges in `_RANGE_DAYS` ever grow,
+this default has to grow with them.
+
+**Failure visibility.** Writes are fire-and-forget (`asyncio.ensure_future`), so a
+rejected insert can never reach the HTTP response — the request has already returned
+200. Three things compensate, and changes here should preserve all three: partition
+failures log at ERROR with the partition names; `PartitionMaintainer.status()` and
+`write_stats()` are exposed on `/metrics`; and `main.py` logs a failed startup at
+ERROR rather than WARNING. The app still boots without Postgres on purpose — quotes,
+charts and news do not need it — but that state is now visible instead of implied.
+
+`backend/main.py` uses a `lifespan` context manager (not the deprecated `@app.on_event`)
+so the maintainer task can be cancelled cleanly on shutdown. The startup pass goes
+through `maintainer.run_once()`, not `ensure_partitions()` directly, so its result
+shows up on `/metrics`.
 
 ## Conventions
 
@@ -199,10 +231,17 @@ empty collection — the UI has no error boundaries and relies on this.
 4. The `api/stock.js` **Vercel** handler's fallback chain, driven by
    `mockResolvedValueOnce` sequences
 
-The FastAPI backend has **no tests at all** — no pytest, no test dependency in
-`backend/requirements.txt`, no `backend/tests/`. The fallback logic under test is the
-JavaScript copy, not the Python one. Backend work that needs test coverage has to stand
-up pytest + pytest-asyncio first.
+`backend/tests/` holds the Python suite (pytest + pytest-asyncio, `asyncio_mode = auto`
+in `pytest.ini`, dependencies in `backend/requirements-dev.txt`):
+
+- `test_partition_window.py` — pure date arithmetic, no database, always runs.
+- `test_partitions_db.py` — real PostgreSQL via the `MARKR_TEST_DSN` env var, skipped
+  when unset. Partitioning cannot be meaningfully faked, so these are integration
+  tests by necessity. They **drop and recreate `price_history`** — point them at a
+  throwaway database, never at one holding data you want.
+
+The fetchers, routers and fallback chains still have no Python coverage. The chain
+logic that *is* tested is the JavaScript copy in `api/`.
 
 Jest runs `testEnvironment: 'node'` and transforms ESM through `babel-jest`
 (`babel.config.cjs` targets the current Node and compiles to CommonJS).

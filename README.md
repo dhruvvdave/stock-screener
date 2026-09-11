@@ -41,6 +41,8 @@ The backend is a FastAPI service with two infrastructure layers sitting in front
 
 **PostgreSQL price history** — after a successful candle fetch, OHLCV rows are written asynchronously (non-blocking) to a `price_history` table range-partitioned by month. The `/history/{ticker}` endpoint reads directly from Postgres with optional `start`/`end` filters.
 
+**Partition maintenance** — Postgres does not create range partitions on demand: an insert whose timestamp falls outside every declared partition is rejected. Because history writes are fire-and-forget, that rejection never reaches the HTTP response, so partitions have to exist before anything writes to them. A maintainer keeps a rolling window of monthly partitions (`PARTITION_MONTHS_BACK` behind, `PARTITION_MONTHS_FORWARD` ahead) created ahead of need. It runs once at startup and then every `PARTITION_REFRESH_HOURS`, so a long-lived process cannot drift past its last partition. The pass is idempotent, and a session-level Postgres advisory lock serialises it across replicas. Outcomes — window, partitions created, failures — are reported on `/metrics`, and failures log at ERROR. The window is only ever *extended*: partitions that age out are left in place rather than dropped, since dropping them would delete price history.
+
 ### Fallback chains
 
 ```
@@ -103,7 +105,7 @@ This starts:
 - PostgreSQL on `localhost:5432` (user/pass/db: `markr`)
 - FastAPI on `localhost:8000`
 
-The database schema (partitioned `price_history` table) is created automatically on first startup.
+The database schema (partitioned `price_history` table) and its monthly partitions are created automatically on startup, and the partition window is refreshed on a schedule while the app runs.
 
 ### 4. Start the frontend
 
@@ -129,6 +131,11 @@ POSTGRES_DSN=postgresql+asyncpg://markr:markr@localhost:5432/markr
 TTL_5MIN=60       # intraday resolutions (5min, 15min, 30min)
 TTL_1H=300        # hourly resolution
 TTL_1D=3600       # daily and above
+
+# Partition maintenance
+PARTITION_MONTHS_BACK=24      # covers a full 2y candle backfill
+PARTITION_MONTHS_FORWARD=3    # drift buffer ahead of today
+PARTITION_REFRESH_HOURS=24    # how often the scheduler re-checks the window
 
 # Token bucket per source: "capacity,refill_rate_per_second"
 RATE_FINNHUB=30,0.5           # 30 burst, 0.5 req/s sustained
@@ -165,7 +172,8 @@ backend/
 ├── services/
 │   ├── cache.py         # Redis response cache with TTL dispatch
 │   ├── rate_limiter.py  # Token bucket limiter via atomic Lua script
-│   └── db.py            # SQLAlchemy async + partitioned price_history
+│   ├── db.py            # SQLAlchemy async + partitioned price_history
+│   └── partitions.py    # Rolling monthly partition window + scheduler
 └── routers/
     ├── stock.py          # /api/stock
     ├── quotes.py         # /api/quotes
@@ -181,8 +189,30 @@ backend/
     └── history.py        # /history/{ticker}
 ```
 
+## Tests
+
+```bash
+npm test                      # frontend + Vercel handler suite (Jest)
+
+pip install -r backend/requirements-dev.txt
+pytest                        # backend suite; database tests skip without a DSN
+```
+
+The partition tests need a real PostgreSQL — declarative partitioning is not
+something a mock can meaningfully stand in for. Point them at a throwaway
+database and they run:
+
+```bash
+createdb markr_test
+MARKR_TEST_DSN=postgresql+asyncpg://markr:markr@localhost:5432/markr_test pytest
+```
+
+Without `MARKR_TEST_DSN` those tests skip and the pure window-arithmetic tests
+still run.
+
 ## Known issues
 
 - The hardcoded `YAHOO_SYMBOLS` map in `src/data/api.js` needs dynamic exchange-aware resolution
 - TSX-V stocks are hit or miss depending on which data source picks them up
-- Monthly Postgres partitions beyond the initial three need to be created manually (or via a cron job)
+- `backend/Dockerfile` copies `requirements.txt` from the build root, but docker-compose builds with the repository root as context, where that file does not exist — the API image does not build as committed
+- There is no `/health` endpoint

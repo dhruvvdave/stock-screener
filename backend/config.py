@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     rate_stooq: str = "30,1.0"
     rate_twelvedata: str = "8,0.133"    # 8 cap, 0.133 req/s (8/min)
 
+    # Rolling window of monthly price_history partitions to keep created.
+    # Back defaults to 24 because the longest candle range the app can request
+    # is 2y, and /api/candle writes every bar it fetches — a shorter window
+    # would drop the oldest rows of a 2y backfill.
+    # Forward defaults to 3 so a process has ~90 days of slack before it could
+    # drift past its last partition; the scheduler re-runs long before that.
+    partition_months_back: int = 24
+    partition_months_forward: int = 3
+    partition_refresh_hours: float = 24.0
+
     def ttl_for_resolution(self, resolution: str) -> int:
         if resolution in ("5min", "5m", "15min", "30min"):
             return self.ttl_5min

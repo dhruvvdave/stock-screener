@@ -2,14 +2,14 @@
 
 import asyncio
 import logging
-from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Column, DateTime, Float, Index, Integer, String, text
+from sqlalchemy import Column, DateTime, Float, Integer, String, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from backend.config import get_settings
+from backend.services.partitions import PartitionRunResult, ensure_partitions
 
 log = logging.getLogger(__name__)
 
@@ -39,24 +39,37 @@ class PriceHistory(Base):
     volume = Column(Float)
 
 
-# DDL that creates the parent table with RANGE partitioning and two initial
-# monthly partitions (current + next month). Partitions can be added via cron.
-PARTITION_DDL = """
-CREATE TABLE IF NOT EXISTS price_history (
-    id        SERIAL,
-    ticker    VARCHAR(20)  NOT NULL,
-    source    VARCHAR(32)  NOT NULL,
-    timestamp TIMESTAMP    NOT NULL,
-    open      DOUBLE PRECISION,
-    high      DOUBLE PRECISION,
-    low       DOUBLE PRECISION,
-    close     DOUBLE PRECISION NOT NULL,
-    volume    DOUBLE PRECISION,
-    PRIMARY KEY (id, timestamp)
-) PARTITION BY RANGE (timestamp);
-
-CREATE INDEX IF NOT EXISTS idx_ph_ticker_ts ON price_history (ticker, timestamp DESC);
-"""
+# DDL for the parent table only. The monthly partitions underneath it are
+# managed by services/partitions.py, which keeps a rolling window of them
+# created ahead of need.
+#
+# One statement per entry, deliberately: asyncpg sends statements through the
+# extended query protocol, which refuses more than one command per prepared
+# statement ("cannot insert multiple commands into a prepared statement"). A
+# single string holding both the CREATE TABLE and the CREATE INDEX therefore
+# fails at runtime rather than at import, which is how the previous version of
+# this file went unnoticed — the exception was caught at startup and logged as
+# "Postgres unavailable".
+PARENT_TABLE_DDL: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS price_history (
+        id        SERIAL,
+        ticker    VARCHAR(20)  NOT NULL,
+        source    VARCHAR(32)  NOT NULL,
+        timestamp TIMESTAMP    NOT NULL,
+        open      DOUBLE PRECISION,
+        high      DOUBLE PRECISION,
+        low       DOUBLE PRECISION,
+        close     DOUBLE PRECISION NOT NULL,
+        volume    DOUBLE PRECISION,
+        PRIMARY KEY (id, timestamp)
+    ) PARTITION BY RANGE (timestamp)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_ph_ticker_ts
+    ON price_history (ticker, timestamp DESC)
+    """,
+)
 
 _engine = None
 _session_factory: async_sessionmaker | None = None
@@ -77,26 +90,35 @@ def get_session_factory() -> async_sessionmaker:
     return _session_factory
 
 
-async def init_db() -> None:
-    """Create the partitioned table if it doesn't exist."""
+async def create_parent_table() -> None:
+    """Create the partitioned parent table and its index. Raises on failure."""
     engine = get_engine()
     async with engine.begin() as conn:
-        await conn.execute(text(PARTITION_DDL))
-        # Create partitions for current and next two months
-        now = datetime.utcnow()
-        for delta in range(3):
-            year = now.year + (now.month + delta - 1) // 12
-            month = (now.month + delta - 1) % 12 + 1
-            next_month = month % 12 + 1
-            next_year = year + (1 if month == 12 else 0)
-            start = f"{year}-{month:02d}-01"
-            end = f"{next_year}-{next_month:02d}-01"
-            part_name = f"price_history_{year}_{month:02d}"
-            await conn.execute(text(
-                f"CREATE TABLE IF NOT EXISTS {part_name} "
-                f"PARTITION OF price_history "
-                f"FOR VALUES FROM ('{start}') TO ('{end}')"
-            ))
+        for statement in PARENT_TABLE_DDL:
+            await conn.execute(text(statement))
+
+
+async def init_db() -> None:
+    """
+    Create the parent table and the current partition window.
+
+    Raises on failure — the caller decides whether a database that cannot be
+    initialised should stop the app from booting. The app itself does this in
+    two steps (see main.py) so that the startup pass is recorded by the
+    PartitionMaintainer and therefore visible on /metrics.
+    """
+    await create_parent_table()
+    await ensure_partition_window()
+
+
+async def ensure_partition_window() -> PartitionRunResult:
+    """Run one partition maintenance pass against the configured window."""
+    settings = get_settings()
+    return await ensure_partitions(
+        get_engine(),
+        months_back=settings.partition_months_back,
+        months_forward=settings.partition_months_forward,
+    )
 
 
 async def write_price_history(
@@ -120,17 +142,31 @@ async def write_price_history(
     await session.commit()
 
 
+# Background writes cannot report failure to the HTTP caller — the response has
+# already gone out. Counting them here is what makes a missing partition (or any
+# other write error) visible on /metrics instead of only in the log.
+_write_failures = 0
+_writes_ok = 0
+
+
+def write_stats() -> dict[str, int]:
+    return {"ok": _writes_ok, "failed": _write_failures}
+
+
 def fire_and_forget_write(ticker: str, source: str, rows: list[dict[str, Any]]) -> None:
     """Schedule an async write without blocking the caller."""
     if not rows:
         return
 
     async def _write():
+        global _write_failures, _writes_ok
         try:
             factory = get_session_factory()
             async with factory() as session:
                 await write_price_history(session, ticker, source, rows)
+            _writes_ok += 1
         except Exception:
+            _write_failures += 1
             log.exception("Background price_history write failed for %s/%s", ticker, source)
 
     asyncio.ensure_future(_write())
