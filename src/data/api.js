@@ -1,42 +1,79 @@
-// Yahoo Finance uses .TO suffix for TSX stocks, .V for TSX-V (Venture exchange)
-export const YAHOO_SYMBOLS = {
-  SHOP:    "SHOP.TO", CNQ:  "CNQ.TO",  RY:   "RY.TO",  TD:  "TD.TO",
-  ATD:     "ATD.TO",  SU:   "SU.TO",   BCE:  "BCE.TO",  ENB: "ENB.TO",
-  NTR:     "NTR.TO",  ABX:  "ABX.TO",  CP:   "CP.TO",
-  "GSI.V": "GSI.V",
-  JPM:  "JPM",  XOM:  "XOM", LLY: "LLY", JNJ: "JNJ",
-  CAT:  "CAT",  WMT:  "WMT", UEC: "UEC",
-  AAPL: "AAPL", NVDA: "NVDA", MSFT: "MSFT",
-  META: "META", AMZN: "AMZN", GOOG: "GOOG",
-};
+// ── Symbol resolution ──────────────────────────────────────────────────────
+//
+// A ticker on its own is not an identifier: SHOP is Shopify on both the TSX and
+// the NYSE, and GSI is a TSX Venture miner as well as a US-listed company. This
+// file used to answer that question with two hardcoded per-ticker maps, which
+// is why a NYSE result for SHOP still fetched Canadian prices and why anything
+// typed by hand resolved to a bare ticker.
+//
+// Resolution now belongs to the backend, which caches it in Redis and can ask
+// Finnhub which listings actually exist. There is deliberately no exchange
+// table in this file: one source of truth, not two that drift.
 
-// Convert bare ticker + exchange to Yahoo Finance symbol
-export function toYahooSymbol(ticker, exchange) {
-  if (YAHOO_SYMBOLS[ticker]) return YAHOO_SYMBOLS[ticker];
-  if (exchange === "TSX")   return ticker + ".TO";
-  if (exchange === "TSX-V") return ticker + ".V";   // Venture exchange uses .V, not .TO
-  if (exchange === "LSE")   return ticker + ".L";
-  if (exchange === "ASX")   return ticker + ".AX";
-  return ticker;
+const RESOLUTION_CACHE = new Map();
+
+const resolutionKey = (ticker, exchange) => `${String(ticker).toUpperCase()}@${exchange || ""}`;
+
+/** Drop memoised resolutions. Used by tests and when a watchlist is cleared. */
+export function clearResolutionCache() {
+  RESOLUTION_CACHE.clear();
 }
 
-// Finnhub uses TSX: prefix for Canadian stocks; US tickers pass through unchanged
-const FINNHUB_SYMBOLS = {
-  SHOP: "TSX:SHOP", CNQ:  "TSX:CNQ", RY:  "TSX:RY",  TD:  "TSX:TD",
-  ATD:  "TSX:ATD",  SU:   "TSX:SU",  BCE: "TSX:BCE", ENB: "TSX:ENB",
-  NTR:  "TSX:NTR",  ABX:  "TSX:ABX", CP:  "TSX:CP",
-  "GSI.V": "TSXV:GSI",
-};
+async function requestResolution(ticker, exchange) {
+  const params = new URLSearchParams({ symbol: ticker });
+  if (exchange) params.set("exchange", exchange);
 
-function toFinnhubSymbol(ticker, exchange) {
-  if (FINNHUB_SYMBOLS[ticker]) return FINNHUB_SYMBOLS[ticker];
-  if (exchange === "TSX")   return `TSX:${ticker}`;
-  if (exchange === "TSX-V") return `TSXV:${ticker}`;
-  if (exchange === "LSE")   return `LSE:${ticker}`;
-  if (exchange === "ASX")   return `ASX:${ticker}`;
-  if (exchange === "XETRA") return `XETRA:${ticker}`;
-  if (exchange === "NSE")   return `NSE:${ticker}`;
-  return ticker;  // US exchanges pass through unchanged (NYSE, NASDAQ, AMEX, OTC)
+  const r = await fetch(`/api/resolve?${params.toString()}`);
+  // 200, 409 (ambiguous) and 404 (unknown) all carry a body describing the
+  // outcome, so only a transport failure is exceptional here.
+  const body = await r.json();
+  if (body && body.status) return body;
+  throw new Error("Malformed resolution response");
+}
+
+/**
+ * Resolve a ticker to its listing and every provider's spelling of it.
+ *
+ * Returns { status, exchange, symbols, candidates, message }, where status is
+ * "resolved", "ambiguous", "not_found" or "unavailable". Never throws: the
+ * caller gets a status it can render.
+ */
+export async function resolveSymbol(ticker, exchange = "") {
+  const symbol = String(ticker || "").trim().toUpperCase();
+  if (!symbol) {
+    return { status: "not_found", message: "No ticker given.", symbols: {}, candidates: [] };
+  }
+
+  const key = resolutionKey(symbol, exchange);
+  if (!RESOLUTION_CACHE.has(key)) {
+    RESOLUTION_CACHE.set(key, requestResolution(symbol, exchange));
+  }
+
+  try {
+    return await RESOLUTION_CACHE.get(key);
+  } catch {
+    // A failed lookup must not be remembered as an answer.
+    RESOLUTION_CACHE.delete(key);
+    return {
+      status: "unavailable",
+      message: `Could not reach symbol resolution for ${symbol}.`,
+      symbols: {},
+      candidates: [],
+    };
+  }
+}
+
+/**
+ * Provider spellings for a listing, or null when it could not be resolved.
+ *
+ * Every fetch wrapper below starts here, so an unresolvable ticker stops before
+ * it can be sent to a provider as a bare string — which is how the old code
+ * ended up charting a different company.
+ */
+async function symbolsFor(ticker, exchange, known) {
+  if (known && known.finnhub) return known;
+  const resolution = await resolveSymbol(ticker, exchange);
+  return resolution.status === "resolved" ? resolution.symbols : null;
 }
 
 // ── Exchange rate (no API key needed) ──────────────────────────────────────
@@ -60,7 +97,9 @@ export async function fetchAllQuotes(stocksOrTickers) {
   await Promise.all(stocksOrTickers.map(async (item) => {
     const ticker   = typeof item === "string" ? item : item.ticker;
     const exchange = typeof item === "string" ? ""   : (item.exchange ?? "");
-    const symbol   = toFinnhubSymbol(ticker, exchange);
+    const symbols  = await symbolsFor(ticker, exchange, typeof item === "string" ? null : item.symbols);
+    if (!symbols) return;
+    const symbol   = symbols.finnhub;
     try {
       const r = await fetch(`/api/stock?symbol=${encodeURIComponent(symbol)}`);
       if (!r.ok) return;
@@ -90,11 +129,17 @@ export async function fetchSupplementaryQuotes(stocks) {
   if (!stocks?.length) return {};
 
   const symbolToTicker = {};
-  const symbols = stocks.map(s => {
-    const ys = toYahooSymbol(s.ticker, s.exchange);
+  const resolved = await Promise.all(
+    stocks.map(s => symbolsFor(s.ticker, s.exchange, s.symbols))
+  );
+  const symbols = [];
+  stocks.forEach((s, i) => {
+    const ys = resolved[i]?.yahoo;
+    if (!ys) return;   // unresolvable: ask for nothing rather than a bare guess
     symbolToTicker[ys] = s.ticker;
-    return ys;
+    symbols.push(ys);
   });
+  if (!symbols.length) return {};
 
   try {
     const r = await fetch(`/api/quotes?symbols=${symbols.join(",")}`);
@@ -116,9 +161,11 @@ export async function fetchSupplementaryQuotes(stocks) {
 // array feeds calculateTechnicals, lastClose backfills missing quotes, and
 // source is surfaced in the UI when a fallback provider served the data.
 
-export async function fetchCandleData(ticker, exchange = "", range = "1y") {
-  const yahooSymbol   = toYahooSymbol(ticker, exchange);
-  const finnhubSymbol = toFinnhubSymbol(ticker, exchange);
+export async function fetchCandleData(ticker, exchange = "", range = "1y", known = null) {
+  const symbols = await symbolsFor(ticker, exchange, known);
+  if (!symbols) return null;
+  const yahooSymbol   = symbols.yahoo ?? "";
+  const finnhubSymbol = symbols.finnhub ?? "";
   try {
     const r = await fetch(
       `/api/candle?symbol=${encodeURIComponent(yahooSymbol)}&finnhubSymbol=${encodeURIComponent(finnhubSymbol)}&range=${range}`
@@ -147,10 +194,12 @@ export async function fetchSearchResults(query) {
 
 // ── Company profile via /api/profile proxy ──────────────────────────────────
 
-export async function fetchCompanyProfile(ticker, exchange = "") {
+export async function fetchCompanyProfile(ticker, exchange = "", known = null) {
   if (!ticker) return null;
-  const yahooSymbol = toYahooSymbol(ticker, exchange);
-  const finnhubSymbol = toFinnhubSymbol(ticker, exchange);
+  const symbols = await symbolsFor(ticker, exchange, known);
+  if (!symbols) return null;
+  const yahooSymbol = symbols.yahoo ?? "";
+  const finnhubSymbol = symbols.finnhub ?? "";
   try {
     const r = await fetch(
       `/api/profile?symbol=${encodeURIComponent(yahooSymbol)}&finnhubSymbol=${encodeURIComponent(finnhubSymbol)}`
@@ -235,8 +284,10 @@ export function calculateTechnicals(prices) {
 
 // ── Analyst data via /api/analyst proxy (Finnhub, optional) ───────────────
 
-export async function fetchAnalystData(ticker, exchange = "") {
-  const symbol = toFinnhubSymbol(ticker, exchange);
+export async function fetchAnalystData(ticker, exchange = "", known = null) {
+  const symbols = await symbolsFor(ticker, exchange, known);
+  if (!symbols?.finnhub) return null;
+  const symbol = symbols.finnhub;
   try {
     const r = await fetch(`/api/analyst?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
@@ -249,8 +300,10 @@ export async function fetchAnalystData(ticker, exchange = "") {
 
 // ── Finnhub stock metrics (fundamentals fallback, no Yahoo needed) ─────────
 
-export async function fetchMetrics(ticker, exchange = "") {
-  const symbol = toFinnhubSymbol(ticker, exchange);
+export async function fetchMetrics(ticker, exchange = "", known = null) {
+  const symbols = await symbolsFor(ticker, exchange, known);
+  if (!symbols?.finnhub) return null;
+  const symbol = symbols.finnhub;
   try {
     const r = await fetch(`/api/metrics?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
@@ -262,8 +315,10 @@ export async function fetchMetrics(ticker, exchange = "") {
 
 // ── Company fundamentals via /api/fundamentals proxy (Yahoo, no key) ───────
 
-export async function fetchFundamentals(ticker, exchange = "") {
-  const symbol = toYahooSymbol(ticker, exchange);
+export async function fetchFundamentals(ticker, exchange = "", known = null) {
+  const symbols = await symbolsFor(ticker, exchange, known);
+  if (!symbols?.yahoo) return null;
+  const symbol = symbols.yahoo;
   try {
     const r = await fetch(`/api/fundamentals?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
@@ -275,9 +330,11 @@ export async function fetchFundamentals(ticker, exchange = "") {
 
 // ── Recent news via /api/news proxy (Yahoo, no key) ─────────────────────────
 
-export async function fetchNews(ticker, exchange = "") {
-  const yahooSymbol   = toYahooSymbol(ticker, exchange);
-  const finnhubSymbol = toFinnhubSymbol(ticker, exchange);
+export async function fetchNews(ticker, exchange = "", known = null) {
+  const symbols = await symbolsFor(ticker, exchange, known);
+  if (!symbols) return null;
+  const yahooSymbol   = symbols.yahoo ?? "";
+  const finnhubSymbol = symbols.finnhub ?? "";
   try {
     const r = await fetch(
       `/api/news?symbol=${encodeURIComponent(yahooSymbol)}&finnhubSymbol=${encodeURIComponent(finnhubSymbol)}`
@@ -292,8 +349,10 @@ export async function fetchNews(ticker, exchange = "") {
 
 // ── FMP + Alpha Vantage via /api/enrich proxy (both optional) ────────────
 
-export async function fetchEnrich(ticker, exchange = "") {
-  const symbol = toYahooSymbol(ticker, exchange);
+export async function fetchEnrich(ticker, exchange = "", known = null) {
+  const symbols = await symbolsFor(ticker, exchange, known);
+  if (!symbols?.yahoo) return null;
+  const symbol = symbols.yahoo;
   try {
     const r = await fetch(`/api/enrich?symbol=${encodeURIComponent(symbol)}`);
     if (!r.ok) return null;
@@ -304,22 +363,11 @@ export async function fetchEnrich(ticker, exchange = "") {
 }
 
 // ── TradingView symbol mapping ─────────────────────────────────────────────
+// TradingView wants EXCHANGE:TICKER. That spelling comes from the resolution
+// like every other provider's — there is no prefix table here.
 
-export function toTVSymbol(ticker, exchange) {
-  const MAP = {
-    "TSX":    "TSX:",
-    "TSX-V":  "TSXV:",
-    "NYSE":   "NYSE:",
-    "NASDAQ": "NASDAQ:",
-    "AMEX":   "AMEX:",
-    "LSE":    "LSE:",
-    "ASX":    "ASX:",
-    "XETRA":  "XETRA:",
-    "NSE":    "NSE:",
-    "OTC":    "OTC:",
-  };
-  const prefix = MAP[exchange];
-  return prefix ? prefix + ticker : ticker;
+export function toTVSymbol(ticker, symbols) {
+  return symbols?.tradingview || ticker;
 }
 
 // ── Currency conversion ────────────────────────────────────────────────────

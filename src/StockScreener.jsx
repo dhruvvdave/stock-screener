@@ -14,6 +14,7 @@ import {
   fetchNews,
   fetchMetrics,
   fetchEnrich,
+  resolveSymbol,
 } from "./data/api";
 import { fmt } from "./data/stocks";
 import { useLocalStorage } from "./hooks/useLocalStorage";
@@ -52,6 +53,10 @@ function createStockFromResult(result) {
     ticker: result.symbol,
     name: result.name || result.symbol,
     exchange: result.exchange || "US",
+    // Present when the caller already resolved the listing (the search box
+    // does). Otherwise the backfill effect below fills these in.
+    symbols: result.symbols,
+    resolution: result.resolution,
     sector: "—",
     description: "",
     price: null,
@@ -102,6 +107,7 @@ export default function StockScreener() {
   const loadingProfilesRef = useRef(new Set());
   const loadingMetricsRef = useRef(new Set());
   const fetchedMetricsRef = useRef(new Set());
+  const resolvingRef = useRef(new Set());
   const toastTimerRef = useRef(null);
 
   const sortedStocks = useMemo(() => sortStocks(stocks, sort), [stocks, sort]);
@@ -211,7 +217,15 @@ export default function StockScreener() {
       if (existing) {
         alreadyExists = true;
         return prev.map((s) => (s.ticker === incoming.ticker
-          ? { ...s, name: existing.name || incoming.name, exchange: existing.exchange || incoming.exchange }
+          ? {
+            ...s,
+            name: existing.name || incoming.name,
+            // A resolved exchange beats a stored one: the stored value may be
+            // the "US" placeholder an earlier version wrote for typed tickers.
+            exchange: incoming.symbols ? incoming.exchange : (existing.exchange || incoming.exchange),
+            symbols: incoming.symbols ?? existing.symbols,
+            resolution: incoming.resolution ?? existing.resolution,
+          }
           : s));
       }
       return [incoming, ...prev];
@@ -226,6 +240,52 @@ export default function StockScreener() {
       setSelectedTicker(incoming.ticker);
     }
   }, [setStocks, showToast]);
+
+  // Stocks restored from localStorage predate symbol resolution: they carry a
+  // ticker and an exchange that may be the old "US" placeholder, and no
+  // provider spellings at all. Resolve each one once, correct the exchange,
+  // and keep the answer on the stock so every fetch below can use it.
+  useEffect(() => {
+    const missing = stocks.filter(
+      (s) => !s.resolution && !resolvingRef.current.has(s.ticker)
+    );
+    if (!missing.length) return;
+
+    missing.forEach((stock) => {
+      resolvingRef.current.add(stock.ticker);
+      resolveSymbol(stock.ticker, stock.exchange)
+        .then((res) => {
+          setStocks((prev) => prev.map((s) => (s.ticker !== stock.ticker ? s : {
+            ...s,
+            exchange: res.status === "resolved" ? res.exchange : s.exchange,
+            symbols: res.status === "resolved" ? res.symbols : s.symbols,
+            resolution: {
+              status: res.status,
+              message: res.message ?? "",
+              candidates: res.candidates ?? [],
+            },
+          })));
+        })
+        .finally(() => resolvingRef.current.delete(stock.ticker));
+    });
+  }, [stocks, setStocks]);
+
+  // Chosen from the candidate list when a ticker is listed on several
+  // exchanges. Re-resolves with the exchange pinned, so nothing is guessed.
+  const pickExchange = useCallback((ticker, exchange) => {
+    resolveSymbol(ticker, exchange).then((res) => {
+      setStocks((prev) => prev.map((s) => (s.ticker !== ticker ? s : {
+        ...s,
+        exchange: res.status === "resolved" ? res.exchange : s.exchange,
+        symbols: res.status === "resolved" ? res.symbols : s.symbols,
+        resolution: {
+          status: res.status,
+          message: res.message ?? "",
+          candidates: res.candidates ?? [],
+        },
+      })));
+    });
+  }, [setStocks]);
 
   const handleSelectStock = useCallback((stock) => {
     setHasActivatedUI(true);
@@ -456,7 +516,9 @@ export default function StockScreener() {
       ...prev,
       [ticker]: prev[ticker] ?? { shares: "", avgCost: "" },
     }));
-    addStock({ symbol: ticker, name: ticker, exchange: "US" });
+    // No exchange is claimed here — the backfill effect resolves it rather
+    // than pinning every hand-added ticker to the US market.
+    addStock({ symbol: ticker, name: ticker });
   }, [addStock, setPortfolio]);
 
   return (
@@ -485,6 +547,7 @@ export default function StockScreener() {
           supplementary={supplementaryData}
           supplementaryLoading={supplementaryLoading}
           profile={profiles[selectedStock.ticker] ?? null}
+          onPickExchange={pickExchange}
         />
       ) : (
         <StockList

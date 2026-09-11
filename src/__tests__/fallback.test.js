@@ -2,14 +2,13 @@
  * Markr — fallback chain + helper tests
  *
  * Covers:
- *   1. Symbol resolution helpers (toYahooSymbol, toTVSymbol, isCADExchange, convertPrice)
+ *   1. Symbol resolution (resolveSymbol, toTVSymbol, isCADExchange, convertPrice)
  *   2. calculateTechnicals (pure function — RSI, MACD, Bollinger Bands, moving averages)
  *   3. Frontend fetch wrappers (fetchAllQuotes, fetchSupplementaryQuotes, fetchCandleData)
  *   4. Backend /api/stock handler — Finnhub → Yahoo → Twelve Data → 404 fallback chain
  */
 
 import {
-  toYahooSymbol,
   toTVSymbol,
   isCADExchange,
   convertPrice,
@@ -17,6 +16,8 @@ import {
   fetchAllQuotes,
   fetchSupplementaryQuotes,
   fetchCandleData,
+  resolveSymbol,
+  clearResolutionCache,
 } from '../data/api.js';
 
 import stockHandler from '../../api/stock.js';
@@ -39,47 +40,138 @@ const makeMockRes = () => {
   return res;
 };
 
+/** A resolved /api/resolve body. */
+const resolution = (over = {}) => ({
+  status: 'resolved',
+  ticker: 'GSI',
+  exchange: 'TSX-V',
+  name: 'Gatos Silver',
+  currency: 'CAD',
+  symbols: {
+    finnhub: 'TSXV:GSI', yahoo: 'GSI.V', stooq: 'gsi.ca',
+    tradingview: 'TSXV:GSI', twelvedata: 'GSI:TSXV',
+  },
+  candidates: [],
+  ...over,
+});
+
+/** US listing, where every provider spelling is the bare ticker. */
+const usResolution = (ticker) => resolution({
+  ticker,
+  exchange: 'NASDAQ',
+  name: ticker,
+  currency: 'USD',
+  symbols: {
+    finnhub: ticker, yahoo: ticker, stooq: `${ticker.toLowerCase()}.us`,
+    tradingview: `NASDAQ:${ticker}`, twelvedata: ticker,
+  },
+});
+
+/**
+ * Queue a resolution response followed by the data response, which is the
+ * order every fetch wrapper now issues them in.
+ */
+const mockResolveThen = (resolved, ...bodies) => {
+  fetch.mockResolvedValueOnce(mockOk(resolved));
+  for (const body of bodies) fetch.mockResolvedValueOnce(mockOk(body));
+};
+
 // Restore all mocks between tests
 beforeEach(() => {
   jest.resetAllMocks();
   global.fetch = jest.fn();
+  clearResolutionCache();
 });
 
 // ─── 1. Symbol resolution ─────────────────────────────────────────────────────
 
-describe('toYahooSymbol', () => {
-  test('hardcoded TSX ticker uses map value', () => {
-    expect(toYahooSymbol('SHOP', 'TSX')).toBe('SHOP.TO');
+describe('resolveSymbol', () => {
+  test('returns every provider spelling for a resolved listing', async () => {
+    fetch.mockResolvedValue(mockOk(resolution()));
+    const r = await resolveSymbol('GSI');
+    expect(r.status).toBe('resolved');
+    expect(r.symbols.yahoo).toBe('GSI.V');
+    expect(r.symbols.finnhub).toBe('TSXV:GSI');
   });
 
-  test('unknown TSX ticker appends .TO', () => {
-    expect(toYahooSymbol('XYZ', 'TSX')).toBe('XYZ.TO');
+  test('passes an exchange hint through to the backend', async () => {
+    fetch.mockResolvedValue(mockOk(resolution()));
+    await resolveSymbol('SHOP', 'TSX');
+    expect(fetch.mock.calls[0][0]).toContain('symbol=SHOP');
+    expect(fetch.mock.calls[0][0]).toContain('exchange=TSX');
   });
 
-  test('TSX-V ticker appends .V', () => {
-    expect(toYahooSymbol('ABC', 'TSX-V')).toBe('ABC.V');
+  test('memoises a resolution so repeated lookups make one request', async () => {
+    fetch.mockResolvedValue(mockOk(resolution()));
+    await resolveSymbol('GSI');
+    await resolveSymbol('GSI');
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  test('LSE ticker appends .L', () => {
-    expect(toYahooSymbol('VOD', 'LSE')).toBe('VOD.L');
+  test('caches each exchange of a ticker separately', async () => {
+    fetch.mockResolvedValue(mockOk(resolution()));
+    await resolveSymbol('SHOP', 'TSX');
+    await resolveSymbol('SHOP', 'NYSE');
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  test('US ticker with no exchange passes through unchanged', () => {
-    expect(toYahooSymbol('AAPL', 'NASDAQ')).toBe('AAPL');
+  test('surfaces an ambiguous listing with its candidates', async () => {
+    fetch.mockResolvedValue(mockOk({
+      status: 'ambiguous',
+      ticker: 'SHOP',
+      message: 'SHOP is listed on more than one exchange (TSX, NYSE). Pick one.',
+      symbols: {},
+      candidates: [
+        { ticker: 'SHOP', exchange: 'TSX', name: 'Shopify' },
+        { ticker: 'SHOP', exchange: 'NYSE', name: 'Shopify' },
+      ],
+    }));
+    const r = await resolveSymbol('SHOP');
+    expect(r.status).toBe('ambiguous');
+    expect(r.candidates).toHaveLength(2);
+    // Nothing is picked on the user's behalf.
+    expect(r.symbols).toEqual({});
+  });
+
+  test('surfaces an unknown ticker with a message naming it', async () => {
+    fetch.mockResolvedValue(mockOk({
+      status: 'not_found', ticker: 'ZZZZ',
+      message: 'No listing found for ZZZZ.', symbols: {}, candidates: [],
+    }));
+    const r = await resolveSymbol('ZZZZ');
+    expect(r.status).toBe('not_found');
+    expect(r.message).toContain('ZZZZ');
+  });
+
+  test('reports unavailable rather than throwing when the request fails', async () => {
+    fetch.mockRejectedValue(new Error('network down'));
+    const r = await resolveSymbol('GSI');
+    expect(r.status).toBe('unavailable');
+  });
+
+  test('does not remember a failed lookup as an answer', async () => {
+    fetch.mockRejectedValueOnce(new Error('network down'));
+    expect((await resolveSymbol('GSI')).status).toBe('unavailable');
+    fetch.mockResolvedValue(mockOk(resolution()));
+    expect((await resolveSymbol('GSI')).status).toBe('resolved');
+  });
+
+  test('an empty ticker never reaches the network', async () => {
+    const r = await resolveSymbol('   ');
+    expect(r.status).toBe('not_found');
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 
 describe('toTVSymbol', () => {
-  test('TSX exchange produces TSX: prefix', () => {
-    expect(toTVSymbol('SHOP', 'TSX')).toBe('TSX:SHOP');
+  test('uses the resolved TradingView spelling', () => {
+    expect(toTVSymbol('SHOP', { tradingview: 'TSX:SHOP' })).toBe('TSX:SHOP');
+    expect(toTVSymbol('NVDA', { tradingview: 'NASDAQ:NVDA' })).toBe('NASDAQ:NVDA');
   });
 
-  test('NASDAQ exchange produces NASDAQ: prefix', () => {
-    expect(toTVSymbol('NVDA', 'NASDAQ')).toBe('NASDAQ:NVDA');
-  });
-
-  test('unknown exchange returns bare ticker', () => {
-    expect(toTVSymbol('FOO', 'UNKNOWN')).toBe('FOO');
+  test('falls back to the bare ticker before a stock has resolved', () => {
+    expect(toTVSymbol('FOO', null)).toBe('FOO');
+    expect(toTVSymbol('FOO', {})).toBe('FOO');
   });
 });
 
@@ -163,45 +255,86 @@ describe('calculateTechnicals', () => {
 
 describe('fetchAllQuotes', () => {
   test('returns a Map with price and change on success', async () => {
-    fetch.mockResolvedValue(mockOk({ price: 220.5, changePercent: 1.23 }));
+    mockResolveThen(usResolution('AAPL'), { price: 220.5, changePercent: 1.23 });
     const result = await fetchAllQuotes(['AAPL']);
     expect(result).toBeInstanceOf(Map);
     expect(result.get('AAPL')).toEqual({ price: 220.5, change: 1.23 });
   });
 
   test('skips a ticker when the API response is not ok', async () => {
-    fetch.mockResolvedValue(mockFail(503));
+    fetch.mockResolvedValueOnce(mockOk(usResolution('BAD')));
+    fetch.mockResolvedValueOnce(mockFail(503));
     const result = await fetchAllQuotes(['BAD']);
     expect(result.has('BAD')).toBe(false);
   });
 
   test('uses changePercent before falling back to change field', async () => {
-    fetch.mockResolvedValue(mockOk({ price: 50, change: 0.5 }));
+    mockResolveThen(usResolution('XYZ'), { price: 50, change: 0.5 });
     const result = await fetchAllQuotes(['XYZ']);
     // changePercent is undefined → falls through to change field
     expect(result.get('XYZ').change).toBe(0.5);
+  });
+
+  test('asks the provider for the resolved spelling, not the bare ticker', async () => {
+    mockResolveThen(resolution(), { price: 1.23, changePercent: 0 });
+    await fetchAllQuotes([{ ticker: 'GSI', exchange: 'TSX-V' }]);
+    // The old code sent "GSI", which is a different company on US exchanges.
+    expect(fetch.mock.calls[1][0]).toContain('TSXV%3AGSI');
+  });
+
+  test('skips a ticker that cannot be resolved rather than guessing', async () => {
+    fetch.mockResolvedValueOnce(mockOk({
+      status: 'not_found', ticker: 'ZZZZ', message: 'No listing found for ZZZZ.',
+      symbols: {}, candidates: [],
+    }));
+    const result = await fetchAllQuotes(['ZZZZ']);
+    expect(result.has('ZZZZ')).toBe(false);
+    // Resolution failed, so no quote request was made at all.
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('reuses a resolution already carried on the stock', async () => {
+    fetch.mockResolvedValue(mockOk({ price: 10, changePercent: 1 }));
+    await fetchAllQuotes([{ ticker: 'GSI', exchange: 'TSX-V', symbols: resolution().symbols }]);
+    // One call: the quote. Nothing was resolved again.
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][0]).toContain('TSXV%3AGSI');
   });
 });
 
 describe('fetchSupplementaryQuotes', () => {
   test('maps Yahoo symbols back to original tickers', async () => {
-    // Backend returns keyed by Yahoo symbol (e.g. SHOP.TO)
-    fetch.mockResolvedValue(mockOk({ 'SHOP.TO': { price: 130, change: -0.5 } }));
+    mockResolveThen(
+      resolution({ ticker: 'SHOP', exchange: 'TSX', symbols: { finnhub: 'TSX:SHOP', yahoo: 'SHOP.TO' } }),
+      { 'SHOP.TO': { price: 130, change: -0.5 } },
+    );
     const result = await fetchSupplementaryQuotes([{ ticker: 'SHOP', exchange: 'TSX' }]);
     expect(result).toHaveProperty('SHOP');
     expect(result.SHOP.price).toBe(130);
   });
 
   test('returns empty object on non-ok response', async () => {
-    fetch.mockResolvedValue(mockFail(429));
+    fetch.mockResolvedValueOnce(mockOk(resolution({ ticker: 'RY', exchange: 'TSX',
+      symbols: { finnhub: 'TSX:RY', yahoo: 'RY.TO' } })));
+    fetch.mockResolvedValueOnce(mockFail(429));
     const result = await fetchSupplementaryQuotes([{ ticker: 'RY', exchange: 'TSX' }]);
     expect(result).toEqual({});
+  });
+
+  test('asks for nothing when no stock resolves', async () => {
+    fetch.mockResolvedValue(mockOk({
+      status: 'not_found', ticker: 'ZZZZ', message: 'nope', symbols: {}, candidates: [],
+    }));
+    const result = await fetchSupplementaryQuotes([{ ticker: 'ZZZZ', exchange: '' }]);
+    expect(result).toEqual({});
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('fetchCandleData', () => {
   test('returns the full payload (prices, lastClose, source) on success', async () => {
-    fetch.mockResolvedValue(mockOk({ prices: [100, 102, 101, 105], lastClose: 105, source: 'yahoo' }));
+    mockResolveThen(usResolution('AAPL'),
+      { prices: [100, 102, 101, 105], lastClose: 105, source: 'yahoo' });
     const data = await fetchCandleData('AAPL', '', '1mo');
     expect(data.prices).toEqual([100, 102, 101, 105]);
     expect(data.lastClose).toBe(105);
@@ -209,19 +342,38 @@ describe('fetchCandleData', () => {
   });
 
   test('defaults to a 1y range so long-window indicators can compute', async () => {
-    fetch.mockResolvedValue(mockOk({ prices: [1, 2, 3] }));
+    mockResolveThen(usResolution('AAPL'), { prices: [1, 2, 3] });
     await fetchCandleData('AAPL');
-    expect(fetch.mock.calls[0][0]).toContain('range=1y');
+    expect(fetch.mock.calls[1][0]).toContain('range=1y');
+  });
+
+  test('sends both provider spellings so the fallback chain can use either', async () => {
+    mockResolveThen(resolution(), { prices: [1, 2, 3] });
+    await fetchCandleData('GSI', 'TSX-V');
+    const url = fetch.mock.calls[1][0];
+    expect(url).toContain('symbol=GSI.V');
+    expect(url).toContain('finnhubSymbol=TSXV%3AGSI');
   });
 
   test('returns null when response contains no prices field', async () => {
-    fetch.mockResolvedValue(mockOk({ prices: null }));
+    mockResolveThen(usResolution('AAPL'), { prices: null });
     expect(await fetchCandleData('AAPL')).toBeNull();
   });
 
   test('returns null for an empty prices array', async () => {
-    fetch.mockResolvedValue(mockOk({ prices: [] }));
+    mockResolveThen(usResolution('AAPL'), { prices: [] });
     expect(await fetchCandleData('AAPL')).toBeNull();
+  });
+
+  test('returns null without charting anything when the ticker is unresolvable', async () => {
+    fetch.mockResolvedValue(mockOk({
+      status: 'not_found', ticker: 'ZZZZ', message: 'No listing found for ZZZZ.',
+      symbols: {}, candidates: [],
+    }));
+    expect(await fetchCandleData('ZZZZ')).toBeNull();
+    // An empty chart used to be drawn from a bare-ticker request; now no
+    // request is made at all.
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 

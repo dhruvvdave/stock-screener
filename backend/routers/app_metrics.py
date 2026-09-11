@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request
 from backend.deps import RedisDep
 from backend.services.cache import ResponseCache
 from backend.services.db import write_stats
+from backend.services.symbols import SymbolResolver
 
 router = APIRouter()
 
@@ -32,10 +33,12 @@ async def get_metrics(request: Request, redis: RedisDep):
     # (in-memory), unlike the Redis-backed counters above. With more than one
     # worker you are reading whichever one served the request.
     maintainer = getattr(request.app.state, "partitions", None)
+    resolution_stats = await SymbolResolver(redis).metrics()
 
     return {
         "cache": cache_stats,
         "sources": source_stats,
+        "resolution": resolution_stats,
         "partitions": maintainer.status() if maintainer else None,
         "history_writes": write_stats(),
     }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { fmt, fmtLarge } from "../data/stocks";
-import { convertPrice, fetchSearchResults } from "../data/api";
+import { convertPrice, fetchSearchResults, resolveSymbol } from "../data/api";
 import { useDebounce } from "../hooks/useDebounce";
 
 const MAX_LOCAL_SUGGESTIONS = 4;
@@ -117,6 +117,10 @@ export default function StockList({
       ?.scrollIntoView({ block: "nearest" });
   }, [activeTicker]);
 
+  // Set when a typed ticker could not be resolved to exactly one listing.
+  // Ambiguity turns the dropdown into a picker; nothing is chosen for the user.
+  const [resolveNotice, setResolveNotice] = useState("");
+
   const localFiltered = useMemo(
     () => stocks.filter((s) => matchesQuery(s, search)),
     [stocks, search]
@@ -127,6 +131,7 @@ export default function StockList({
 
     const run = async () => {
       const query = debouncedSearch.trim();
+      setResolveNotice("");
       if (query.length < 1) {
         setRemoteSuggestions([]);
         setSuggestionsOpen(false);
@@ -158,18 +163,64 @@ export default function StockList({
   }, [localFiltered, remoteSuggestions, search]);
 
   const selectSuggestion = useCallback((result) => {
-    onAddStock(result, { select: true });
+    // The exchange is known from the search result, so this resolution is a
+    // table lookup on the backend rather than another search.
+    resolveSymbol(result.symbol, result.exchange).then((resolution) => {
+      onAddStock({
+        ...result,
+        exchange: resolution.status === "resolved" ? resolution.exchange : result.exchange,
+        symbols: resolution.status === "resolved" ? resolution.symbols : undefined,
+        resolution: {
+          status: resolution.status,
+          message: resolution.message ?? "",
+          candidates: resolution.candidates ?? [],
+        },
+      }, { select: true });
+    });
     setSearch("");
+    setResolveNotice("");
     setRemoteSuggestions([]);
     setSuggestionsOpen(false);
     setSuggestionIndex(-1);
   }, [onAddStock]);
 
-  const addTypedTicker = useCallback(() => {
+  const addTypedTicker = useCallback(async () => {
     const symbol = search.trim().toUpperCase();
     if (!symbol) return;
-    onAddStock({ symbol, name: symbol, exchange: "US" }, { select: true });
+
+    // A typed ticker carries no exchange. The old code assumed "US", which is
+    // why hand-typed TSX-V tickers fetched a different company's data.
+    const resolution = await resolveSymbol(symbol);
+
+    if (resolution.status === "ambiguous") {
+      // Turn the dropdown into a picker over the candidate listings. They have
+      // the same shape as search results, so the existing rows render them.
+      setRemoteSuggestions(resolution.candidates.map((c) => ({
+        symbol: c.ticker,
+        name: c.name || c.ticker,
+        exchange: c.exchange,
+      })));
+      setResolveNotice(resolution.message);
+      setSuggestionsOpen(true);
+      setSuggestionIndex(-1);
+      return;
+    }
+
+    if (resolution.status !== "resolved") {
+      setResolveNotice(resolution.message || `Could not resolve ${symbol}.`);
+      setSuggestionsOpen(true);
+      return;
+    }
+
+    onAddStock({
+      symbol: resolution.ticker || symbol,
+      name: resolution.name || symbol,
+      exchange: resolution.exchange,
+      symbols: resolution.symbols,
+      resolution: { status: resolution.status, message: "", candidates: [] },
+    }, { select: true });
     setSearch("");
+    setResolveNotice("");
     setSuggestionsOpen(false);
     setSuggestionIndex(-1);
   }, [onAddStock, search]);
@@ -217,7 +268,7 @@ export default function StockList({
 
   const showSkeleton = quotesLoading && !quotesInitialized;
   const showRefreshDot = quotesLoading && quotesInitialized;
-  const suggestionsVisible = suggestionsOpen && suggestions.length > 0;
+  const suggestionsVisible = suggestionsOpen && (suggestions.length > 0 || !!resolveNotice);
 
   return (
     <div className={`sl-page ${minimalSplash ? "minimal" : ""}`}>
@@ -260,6 +311,9 @@ export default function StockList({
 
             {suggestionsVisible && (
               <div className="sl-autofill" id="sl-suggestions" role="listbox" aria-label="Ticker suggestions">
+                {resolveNotice && (
+                  <div className="sl-autofill-notice" role="status">{resolveNotice}</div>
+                )}
                 {suggestions.map((item, idx) => (
                   <button
                     key={`${item.symbol}-${item.exchange}-${idx}`}

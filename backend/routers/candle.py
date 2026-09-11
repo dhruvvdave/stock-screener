@@ -10,6 +10,7 @@ from backend.deps import CacheDep, HttpDep, LimiterDep
 from backend.fetchers.finnhub import FinnhubFetcher
 from backend.fetchers.yahoo import YahooFetcher
 from backend.fetchers.stooq import StooqFetcher
+from backend.services.exchanges import parse_symbol, to_provider_symbol
 from backend.services.db import fire_and_forget_write
 
 log = logging.getLogger(__name__)
@@ -76,7 +77,8 @@ async def get_candle(
     # 4. Twelve Data
     if settings.twelve_data_key and finnhubSymbol and await limiter.consume("twelvedata"):
         await cache._redis.incr("metrics:source:twelvedata:requests")
-        td_sym = ":".join(reversed(finnhubSymbol.upper().split(":"))) if ":" in finnhubSymbol else finnhubSymbol
+        ticker, exchange = parse_symbol(finnhubSymbol)
+        td_sym = to_provider_symbol(ticker, exchange, "twelvedata") or finnhubSymbol
         try:
             r = await http.get(
                 "https://api.twelvedata.com/time_series",

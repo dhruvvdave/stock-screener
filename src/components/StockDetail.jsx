@@ -269,7 +269,7 @@ export default function StockDetail({
   stock: s, onBack, watchlist, onStarClick,
   currency, usdToCadRate,
   candleData, supplementary, supplementaryLoading,
-  profile,
+  profile, onPickExchange,
 }) {
   if (!s) return null;
   const starred = watchlist.includes(s.ticker);
@@ -280,6 +280,11 @@ export default function StockDetail({
   const chgPos = hasChg && s.change >= 0;
   const vr     = volRatio(s);
   const ms     = momentumScore(s);
+
+  // An unresolved or ambiguous listing is shown where the chart would be —
+  // a blank chart with no explanation was the old behaviour and it read as a
+  // bug rather than as a question.
+  const resolution = s.resolution;
 
   const pick = (...vals) => vals.find(v => v != null) ?? null;
   const ov  = supplementary?.overview ?? {};
@@ -373,7 +378,26 @@ export default function StockDetail({
               )}
             </div>
           </div>
-          <TVChart key={`${s.ticker}-${s.exchange}`} ticker={s.ticker} exchange={s.exchange} />
+          {resolution && resolution.status !== "resolved" ? (
+            <div className="sd-resolve-notice" role="status">
+              <div className="sd-resolve-message">{resolution.message}</div>
+              {resolution.candidates?.length > 0 && (
+                <div className="sd-resolve-choices">
+                  {resolution.candidates.map((c) => (
+                    <button
+                      key={c.exchange}
+                      className="sd-resolve-choice"
+                      onClick={() => onPickExchange?.(s.ticker, c.exchange)}
+                    >
+                      {c.ticker} · {c.exchange}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <TVChart key={`${s.ticker}-${s.exchange}`} ticker={s.ticker} symbols={s.symbols} />
+          )}
         </div>
 
         <div className="sd-divider" />

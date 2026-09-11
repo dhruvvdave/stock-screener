@@ -346,6 +346,17 @@ button { touch-action: manipulation; }
   min-width: 64px;
   flex-shrink: 0;
 }
+/* Shown when a typed ticker resolves to several listings, or to none. */
+.sl-autofill-notice {
+  padding: 9px 11px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-bottom: 1px solid var(--border);
+}
+
 .sl-autofill-exch {
   color: var(--text-3);
   font-family: var(--font-mono);
@@ -1266,4 +1277,44 @@ button { touch-action: manipulation; }
   font-size: 11px;
   color: var(--text-3);
   flex: 1;
+}
+
+/* Unresolved listing, shown in place of the chart in the detail view. */
+.sd-resolve-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 220px;
+  padding: 28px;
+  border: 1px dashed var(--border-2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.01);
+}
+.sd-resolve-message {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-2);
+  max-width: 52ch;
+}
+.sd-resolve-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sd-resolve-choice {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.sd-resolve-choice:hover {
+  background: rgba(232, 160, 32, 0.2);
 }

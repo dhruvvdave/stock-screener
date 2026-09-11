@@ -67,3 +67,99 @@ async def partition_names(engine) -> list[str]:
             """
         ))
         return [r[0] for r in rows]
+
+
+# ── Doubles for the symbol-resolution tests ──────────────────────────────────
+#
+# These need Redis and Finnhub, neither of which is worth standing up for what
+# is really cache bookkeeping and JSON parsing. Postgres got a real server
+# because partitioning cannot be faked; these can.
+
+
+class FakeRedis:
+    """The handful of Redis operations SymbolResolver actually uses."""
+
+    def __init__(self, fail: bool = False):
+        self.store: dict[str, str] = {}
+        self.ttls: dict[str, int] = {}
+        self.fail = fail          # simulate Redis being down
+        self.get_calls = 0
+        self.setex_calls = 0
+
+    async def get(self, key):
+        if self.fail:
+            raise ConnectionError("redis down")
+        self.get_calls += 1
+        return self.store.get(key)
+
+    async def setex(self, key, ttl, value):
+        if self.fail:
+            raise ConnectionError("redis down")
+        self.setex_calls += 1
+        self.store[key] = value
+        self.ttls[key] = ttl
+
+    async def incr(self, key):
+        if self.fail:
+            raise ConnectionError("redis down")
+        self.store[key] = str(int(self.store.get(key, 0)) + 1)
+
+
+class FakeResponse:
+    def __init__(self, payload, ok=True):
+        self._payload = payload
+        self.is_success = ok
+
+    def json(self):
+        return self._payload
+
+
+class FakeHttp:
+    """Stands in for httpx.AsyncClient, recording what was requested."""
+
+    def __init__(self, payload=None, ok=True):
+        self.payload = payload if payload is not None else {"result": []}
+        self.ok = ok
+        self.calls = 0
+
+    async def get(self, url, **kwargs):
+        self.calls += 1
+        return FakeResponse(self.payload, self.ok)
+
+
+class FakeLimiter:
+    """Token bucket stand-in: allows *allow* calls, then denies."""
+
+    def __init__(self, allow=True):
+        self.allow = allow
+        self.calls = 0
+
+    async def consume(self, source):
+        self.calls += 1
+        return self.allow
+
+
+def finnhub_search_payload(*listings):
+    """Build a Finnhub /search body from (symbol, description, displaySymbol)."""
+    return {
+        "result": [
+            {
+                "symbol": symbol,
+                "displaySymbol": display,
+                "description": description,
+                "type": "Common Stock",
+            }
+            for symbol, description, display in listings
+        ]
+    }
+
+
+@pytest.fixture(autouse=True)
+def finnhub_key(monkeypatch):
+    """FinnhubFetcher no-ops without a key; give every test one."""
+    from backend.config import get_settings
+
+    monkeypatch.setenv("FINNHUB_KEY", "test-key")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()

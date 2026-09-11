@@ -41,6 +41,8 @@ The backend is a FastAPI service with two infrastructure layers sitting in front
 
 **PostgreSQL price history** — after a successful candle fetch, OHLCV rows are written asynchronously (non-blocking) to a `price_history` table range-partitioned by month. The `/history/{ticker}` endpoint reads directly from Postgres with optional `start`/`end` filters.
 
+**Symbol resolution** — a ticker on its own is not an identifier: `SHOP` is Shopify on both the TSX and the NYSE. `/api/resolve` turns a ticker into a single listing and every provider's spelling of it (`TSXV:GSI`, `GSI.V`, `gsi.ca`), derived from one table of exchange conventions in `backend/services/exchanges.py` rather than a hand-maintained per-ticker map. Resolutions are cached in Redis for a week; misses for an hour. A ticker listed on more than one exchange returns `409` with the candidates so the caller can ask which was meant — nothing is picked on the user's behalf — and an unknown ticker returns `404` with a message rather than an empty chart.
+
 **Partition maintenance** — Postgres does not create range partitions on demand: an insert whose timestamp falls outside every declared partition is rejected. Because history writes are fire-and-forget, that rejection never reaches the HTTP response, so partitions have to exist before anything writes to them. A maintainer keeps a rolling window of monthly partitions (`PARTITION_MONTHS_BACK` behind, `PARTITION_MONTHS_FORWARD` ahead) created ahead of need. It runs once at startup and then every `PARTITION_REFRESH_HOURS`, so a long-lived process cannot drift past its last partition. The pass is idempotent, and a session-level Postgres advisory lock serialises it across replicas. Outcomes — window, partitions created, failures — are reported on `/metrics`, and failures log at ERROR. The window is only ever *extended*: partitions that age out are left in place rather than dropped, since dropping them would delete price history.
 
 ### Fallback chains
@@ -61,6 +63,7 @@ Enrich:        FMP + Alpha Vantage (parallel)
 | GET | `/api/quotes?symbols=` | Batch quotes |
 | GET | `/api/candle?symbol=&finnhubSymbol=&range=` | OHLCV chart data |
 | GET | `/api/search?q=` | Ticker search |
+| GET | `/api/resolve?symbol=&exchange=` | Ticker → listing + provider symbols (409 ambiguous, 404 unknown) |
 | GET | `/api/profile?symbol=&finnhubSymbol=` | Company profile |
 | GET | `/api/analyst?symbol=` | Analyst recommendations + sentiment |
 | GET | `/api/news?symbol=&finnhubSymbol=` | Recent news |
@@ -132,6 +135,10 @@ TTL_5MIN=60       # intraday resolutions (5min, 15min, 30min)
 TTL_1H=300        # hourly resolution
 TTL_1D=3600       # daily and above
 
+# Symbol resolution cache
+TTL_SYMBOL_RESOLUTION=604800  # 7 days — a ticker's exchange rarely changes
+TTL_SYMBOL_MISS=3600          # 1 hour — a typo shouldn't pin a bad answer
+
 # Partition maintenance
 PARTITION_MONTHS_BACK=24      # covers a full 2y candle backfill
 PARTITION_MONTHS_FORWARD=3    # drift buffer ahead of today
@@ -173,7 +180,9 @@ backend/
 │   ├── cache.py         # Redis response cache with TTL dispatch
 │   ├── rate_limiter.py  # Token bucket limiter via atomic Lua script
 │   ├── db.py            # SQLAlchemy async + partitioned price_history
-│   └── partitions.py    # Rolling monthly partition window + scheduler
+│   ├── partitions.py    # Rolling monthly partition window + scheduler
+│   ├── exchanges.py     # Exchange conventions — every provider's symbol format
+│   └── symbols.py       # Ticker → listing resolution, cached in Redis
 └── routers/
     ├── stock.py          # /api/stock
     ├── quotes.py         # /api/quotes
@@ -186,6 +195,7 @@ backend/
     ├── stock_metrics.py  # /api/metrics (per-ticker)
     ├── enrich.py         # /api/enrich
     ├── app_metrics.py    # /metrics (system)
+    ├── resolve.py        # /api/resolve
     └── history.py        # /history/{ticker}
 ```
 
@@ -212,7 +222,6 @@ still run.
 
 ## Known issues
 
-- The hardcoded `YAHOO_SYMBOLS` map in `src/data/api.js` needs dynamic exchange-aware resolution
-- TSX-V stocks are hit or miss depending on which data source picks them up
+- `/api/resolve` exists only in the FastAPI backend, since it needs Redis. The Vercel `api/*.js` functions have no equivalent, so a Vercel-hosted frontend does not get exchange-aware resolution
 - `backend/Dockerfile` copies `requirements.txt` from the build root, but docker-compose builds with the repository root as context, where that file does not exist — the API image does not build as committed
 - There is no `/health` endpoint

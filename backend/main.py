@@ -14,7 +14,7 @@ from backend.services.partitions import PartitionMaintainer
 from backend.routers import (
     stock, quotes, candle, search, profile,
     analyst, news, fundamentals, stock_metrics,
-    enrich, app_metrics, history,
+    enrich, app_metrics, history, resolve,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -88,7 +88,7 @@ def create_app() -> FastAPI:
     for router_module in [
         stock, quotes, candle, search, profile,
         analyst, news, fundamentals, stock_metrics,
-        enrich, app_metrics, history,
+        enrich, app_metrics, history, resolve,
     ]:
         app.include_router(router_module.router)
 

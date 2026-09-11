@@ -5,19 +5,12 @@ from datetime import date, timedelta
 import httpx
 
 from backend.config import get_settings
+from backend.services.exchanges import EXCHANGES, normalise_exchange
 
 SOURCE = "finnhub"
 _BASE = "https://finnhub.io/api/v1"
 
 RANGE_DAYS = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730}
-
-
-def _finnhub_to_yahoo(symbol: str) -> str:
-    for prefix, suffix in [("TSXV:", ".V"), ("TSX:", ".TO"), ("LSE:", ".L"),
-                            ("ASX:", ".AX"), ("NSE:", ".NS")]:
-        if symbol.startswith(prefix):
-            return symbol[len(prefix):] + suffix
-    return symbol
 
 
 class FinnhubFetcher:
@@ -225,24 +218,33 @@ class FinnhubFetcher:
 
 
 def _resolve_exchange(item: dict) -> str:
+    """Normalise whatever Finnhub reports into a canonical exchange code."""
     ds = item.get("displaySymbol", "")
-    for prefix, name in [("TSXV:", "TSX-V"), ("TSX:", "TSX"), ("LSE:", "LSE"),
-                          ("ASX:", "ASX"), ("XETRA:", "XETRA"), ("NSE:", "NSE")]:
-        if ds.startswith(prefix):
-            return name
-    exch = (item.get("primaryExch") or item.get("exchange") or "").upper()
-    if "TORONTO" in exch or exch == "TSX":
-        return "TSX"
-    if "VENTURE" in exch or exch == "TSXV":
-        return "TSX-V"
-    if "NEW YORK" in exch or exch == "NYSE":
-        return "NYSE"
-    if "NASDAQ" in exch:
-        return "NASDAQ"
-    if "AMEX" in exch:
-        return "AMEX"
-    if "OTC" in exch or exch == "PINK":
-        return "OTC"
-    if "LONDON" in exch or exch == "LSE":
-        return "LSE"
-    return exch or "US"
+    prefix = ds.partition(":")[0] if ":" in ds else ""
+    if prefix:
+        for ex in EXCHANGES.values():
+            if ex.finnhub_prefix and ex.finnhub_prefix.rstrip(":") == prefix.upper():
+                return ex.code
+
+    reported = (item.get("primaryExch") or item.get("exchange") or "").upper()
+    code = normalise_exchange(reported)
+    if code:
+        return code
+
+    # Finnhub also reports full exchange names ("NASDAQ NMS - GLOBAL MARKET"),
+    # which no alias can enumerate; match on the distinctive word.
+    for needle, resolved in (
+        ("VENTURE", "TSX-V"),
+        ("TORONTO", "TSX"),
+        ("NEW YORK", "NYSE"),
+        ("NASDAQ", "NASDAQ"),
+        ("AMEX", "AMEX"),
+        ("OTC", "OTC"),
+        ("PINK", "OTC"),
+        ("LONDON", "LSE"),
+        ("XETRA", "XETRA"),
+    ):
+        if needle in reported:
+            return resolved
+
+    return reported or "US"

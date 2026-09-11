@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     partition_months_forward: int = 3
     partition_refresh_hours: float = 24.0
 
+    # Symbol resolution cache. A ticker's exchange changes when a company
+    # relists, so hits are held for a week. Misses are held for an hour: long
+    # enough that a typo cannot burn the search quota in a loop, short enough
+    # that a newly listed ticker resolves the same day.
+    ttl_symbol_resolution: int = 604800   # 7 days
+    ttl_symbol_miss: int = 3600           # 1 hour
+
     def ttl_for_resolution(self, resolution: str) -> int:
         if resolution in ("5min", "5m", "15min", "30min"):
             return self.ttl_5min

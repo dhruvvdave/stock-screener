@@ -9,19 +9,12 @@ from backend.deps import CacheDep, HttpDep, LimiterDep
 from backend.fetchers.finnhub import FinnhubFetcher
 from backend.fetchers.yahoo import YahooFetcher
 from backend.config import get_settings
+from backend.services.exchanges import parse_symbol, to_provider_symbol
 
 log = logging.getLogger(__name__)
 router = APIRouter()
 
 _RESOLUTION = "quote"
-
-
-def _finnhub_to_yahoo(symbol: str) -> str:
-    for prefix, suffix in [("TSXV:", ".V"), ("TSX:", ".TO"), ("LSE:", ".L"),
-                            ("ASX:", ".AX"), ("NSE:", ".NS")]:
-        if symbol.startswith(prefix):
-            return symbol[len(prefix):] + suffix
-    return symbol
 
 
 @router.get("/api/stock")
@@ -52,7 +45,8 @@ async def get_stock(
     # 2. Yahoo Finance
     if await limiter.consume("yahoo"):
         await _incr_source(cache._redis, "yahoo")
-        yahoo_sym = _finnhub_to_yahoo(symbol)
+        ticker, exchange = parse_symbol(symbol)
+        yahoo_sym = to_provider_symbol(ticker, exchange, "yahoo") or symbol
         q = await yahoo.quote(yahoo_sym)
         if q:
             result = {
@@ -71,7 +65,8 @@ async def get_stock(
     settings = get_settings()
     if settings.twelve_data_key and await limiter.consume("twelvedata"):
         await _incr_source(cache._redis, "twelvedata")
-        td_sym = ":".join(reversed(symbol.split(":"))) if ":" in symbol else symbol
+        ticker, exchange = parse_symbol(symbol)
+        td_sym = to_provider_symbol(ticker, exchange, "twelvedata") or symbol
         try:
             r = await http.get(
                 "https://api.twelvedata.com/price",

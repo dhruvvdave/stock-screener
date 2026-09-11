@@ -57,6 +57,11 @@ The same endpoints are implemented twice:
 When changing fallback behaviour, decide deliberately whether the JS copy needs the
 same change. The Jest suite tests the JS copy, not the Python one.
 
+`/api/resolve` is FastAPI-only: it needs Redis, which Vercel functions have no access
+to. A Vercel-hosted frontend therefore gets no exchange-aware resolution. This was a
+deliberate call — the alternative was a third copy of the conventions — and it stops
+mattering once the backend is deployed properly.
+
 ### Request path
 
 Every external call goes through two layers:
@@ -115,27 +120,61 @@ Two behaviours to keep in mind:
   a null payload vs. an empty list. Match the router you are editing rather than
   normalising it as a side effect of some other change.
 
-### Symbol formats
+### Symbol formats and resolution
 
-Each provider wants a different spelling of the same ticker:
+Each provider wants a different spelling of the same listing:
 
-| Provider | TSX | TSX-V | Example |
+| Provider | TSX | TSX-V | US |
 |---|---|---|---|
-| Finnhub | `TSX:SHOP` | `TSXV:GSI` | prefix form |
-| Yahoo | `SHOP.TO` | `GSI.V` | suffix form |
-| Stooq | `shop.ca` | `gsi.ca` | lowercase + country |
-| TradingView | `TSX:SHOP` | `TSXV:GSI` | prefix form |
+| Finnhub | `TSX:SHOP` | `TSXV:GSI` | `AAPL` |
+| Yahoo | `SHOP.TO` | `GSI.V` | `AAPL` |
+| Stooq | `shop.ca` | `gsi.ca` | `aapl.us` |
+| TradingView | `TSX:SHOP` | `TSXV:GSI` | `NASDAQ:AAPL` |
+| Twelve Data | `SHOP:TSX` | `GSI:TSXV` | `AAPL` |
 
-Conversion logic is currently duplicated in at least four places:
-`src/data/api.js` (`YAHOO_SYMBOLS`, `FINNHUB_SYMBOLS`, `toYahooSymbol`,
-`toFinnhubSymbol`, `toTVSymbol`), `backend/routers/stock.py:_finnhub_to_yahoo`,
-`backend/fetchers/finnhub.py:_finnhub_to_yahoo`, `backend/fetchers/stooq.py:_to_stooq_symbol`,
-and `api/stock.js:finnhubToYahoo`. The frontend hardcoded maps are the known cause of
-TSX-V flakiness.
+**`backend/services/exchanges.py` is the only place these literals live.** It holds
+one row per exchange (suffix, prefix, currency, country) and derives every provider
+spelling from a ticker plus an exchange. Adding an exchange is one row; adding a
+suffix literal anywhere else is a bug. It replaced five duplicated converters:
+`_finnhub_to_yahoo` in both `fetchers/finnhub.py` and `routers/stock.py`,
+`_to_stooq_symbol`, the Twelve Data `":".join(reversed(...))` hack in two routers,
+and the frontend's `YAHOO_SYMBOLS` / `FINNHUB_SYMBOLS` maps.
 
-The frontend passes both spellings to endpoints that need them — `/api/candle` and
-`/api/news` take `symbol` (Yahoo) *and* `finnhubSymbol` (Finnhub), and each fallback
-step uses whichever it understands.
+`to_provider_symbol()` returns **None** where a provider has no coverage (Stooq has
+no Australian or Indian data). None means "this provider cannot serve this listing",
+and callers must fall through rather than substitute something plausible — the old
+code appended Stooq's US suffix to everything it did not recognise, turning
+`NSE:INFY` into `nse:infy.us`, a real query for a different company.
+
+**`backend/services/symbols.py` decides *which* listing a ticker means.** A ticker is
+not an identifier: SHOP is Shopify on the TSX and the NYSE. `SymbolResolver.resolve()`
+returns one of three statuses:
+
+- `resolved` — one listing; every provider spelling is derived
+- `ambiguous` — several listings; `candidates` is populated and `symbols` is empty.
+  **Never pick one.** The whole point is that guessing is what broke the old code.
+- `not_found` — no listing; `message` says what was tried
+
+Resolution is cached in Redis at `symbol:v1:{TICKER}[@{EXCHANGE}]` — `ttl_symbol_resolution`
+(7 days) for hits, `ttl_symbol_miss` (1 hour) for misses. Redis is an optimisation, not
+a dependency: every cache operation is wrapped, and resolution still works when Redis is
+down.
+
+The cheap path matters: a ticker whose exchange is already known (a search result, a
+stored watchlist entry, `TSXV:GSI`, `GSI.V`) resolves from the table with **no network
+call at all**. Only a bare, unknown ticker reaches Finnhub search.
+
+`GET /api/resolve` maps the statuses to 200 / 409 / 404. 409 rather than 400 for
+ambiguity: the request was well formed, it just does not identify one listing.
+
+**Frontend.** `src/data/api.js` contains no exchange table — that was the duplication
+being removed. It calls `/api/resolve`, memoises the answer per `TICKER@EXCHANGE` for
+the session, and every `fetch*` wrapper starts with `symbolsFor()`, so an unresolvable
+ticker stops before it can be sent to a provider as a bare string. Stocks carry their
+resolved `symbols` and a `resolution` status; `StockScreener` backfills both for
+watchlists stored before this existed, correcting the `"US"` placeholder earlier
+versions wrote for hand-typed tickers. An ambiguous typed ticker turns the search
+dropdown into a picker; an unresolved one replaces the chart with its message.
 
 ### Price history and partitioning
 
@@ -239,9 +278,17 @@ in `pytest.ini`, dependencies in `backend/requirements-dev.txt`):
   when unset. Partitioning cannot be meaningfully faked, so these are integration
   tests by necessity. They **drop and recreate `price_history`** — point them at a
   throwaway database, never at one holding data you want.
+- `test_exchanges.py` — pure symbol conventions, no I/O.
+- `test_symbols.py` — the resolver, with Redis and Finnhub faked (`FakeRedis`,
+  `FakeHttp`, `FakeLimiter` in `conftest.py`). The contrast with the partition tests
+  is deliberate: partitioning is database behaviour and needs a database; this is
+  cache bookkeeping and JSON shaping, and a double is enough.
+- `test_resolve_router.py` — the endpoint's status codes, via `ASGITransport` with
+  the Redis/HTTP/limiter dependencies overridden. No lifespan is entered, so nothing
+  touches Postgres.
 
-The fetchers, routers and fallback chains still have no Python coverage. The chain
-logic that *is* tested is the JavaScript copy in `api/`.
+The fetchers and the fallback chains themselves still have no Python coverage. The
+chain logic that *is* tested is the JavaScript copy in `api/`.
 
 Jest runs `testEnvironment: 'node'` and transforms ESM through `babel-jest`
 (`babel.config.cjs` targets the current Node and compiles to CommonJS).

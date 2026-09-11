@@ -4,17 +4,29 @@ from datetime import datetime, timedelta
 
 import httpx
 
+from backend.services.exchanges import parse_symbol, to_provider_symbol
+
 SOURCE = "stooq"
 _RANGE_DAYS = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730}
 
 
 def _to_stooq_symbol(finnhub_symbol: str) -> str | None:
+    """
+    Stooq spelling for a Finnhub symbol, or None where Stooq has no coverage.
+
+    The previous version appended Stooq's US suffix to anything it did not
+    recognise, so "NSE:INFY" became "nse:infy.us" — a query for a different
+    company entirely. Returning None lets the router fall through to the next
+    source instead of charting the wrong stock.
+    """
     if not finnhub_symbol:
         return None
-    for prefix, suffix in [("TSX:", ".ca"), ("TSXV:", ".ca"), ("LSE:", ".uk"), ("ASX:", ".au")]:
-        if finnhub_symbol.startswith(prefix):
-            return finnhub_symbol[len(prefix):].lower() + suffix
-    return finnhub_symbol.lower() + ".us"
+    ticker, exchange = parse_symbol(finnhub_symbol)
+    if exchange is None:
+        # A bare ticker with no exchange claim is a US listing as far as the
+        # rest of the app is concerned.
+        return f"{ticker.lower()}.us" if ticker else None
+    return to_provider_symbol(ticker, exchange, "stooq")
 
 
 class StooqFetcher:

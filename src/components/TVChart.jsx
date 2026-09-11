@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from "react";
 import { toTVSymbol } from "../data/api";
 
-export default function TVChart({ ticker, exchange }) {
-  const symbol      = useMemo(() => toTVSymbol(ticker, exchange), [ticker, exchange]);
+export default function TVChart({ ticker, symbols }) {
+  const symbol      = useMemo(() => toTVSymbol(ticker, symbols), [ticker, symbols]);
   const containerId = useMemo(() => `tv_${ticker.replace(/[^A-Za-z0-9]/g, "_")}`, [ticker]);
 
   useEffect(() => {
