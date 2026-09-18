@@ -99,12 +99,28 @@ export default function StockScreener() {
 
   const previousPricesRef = useRef({});
   const crossedStateRef = useRef({});
+  // refreshQuotes reads these but must not be re-created when they change:
+  // it replaces `stocks` on every run, so depending on `stocks` would give it
+  // a new identity after each refresh, tear down the interval effect keyed on
+  // it, and start the next request immediately instead of 45s later.
+  const stocksRef = useRef(stocks);
+  const priceAlertsRef = useRef(priceAlerts);
+  const refreshInFlightRef = useRef(false);
   const loadingProfilesRef = useRef(new Set());
   const loadingMetricsRef = useRef(new Set());
   const fetchedMetricsRef = useRef(new Set());
   const toastTimerRef = useRef(null);
 
+  useEffect(() => { stocksRef.current = stocks; }, [stocks]);
+  useEffect(() => { priceAlertsRef.current = priceAlerts; }, [priceAlerts]);
+
   const sortedStocks = useMemo(() => sortStocks(stocks, sort), [stocks, sort]);
+  // A primitive that changes only when the set of tickers changes, so a price
+  // update does not restart the polling interval.
+  const tickerKey = useMemo(
+    () => stocks.map((s) => s.ticker).sort().join(","),
+    [stocks]
+  );
   const clampedNavIndex = Math.min(navIndex, Math.max(0, sortedStocks.length - 1));
   const activeTicker = sortedStocks[clampedNavIndex]?.ticker ?? null;
   const selectedStock = useMemo(
@@ -147,16 +163,20 @@ export default function StockScreener() {
   }, [showToast]);
 
   const refreshQuotes = useCallback(async () => {
-    if (!stocks.length) {
+    const current = stocksRef.current;
+    if (!current.length) {
       setQuotesLive(false);
       return;
     }
+    // A slow round trip must not let the next tick pile on behind it.
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
 
     setQuotesLoading(true);
     try {
       const [quotesMap, supplementaryMap] = await Promise.all([
-        fetchAllQuotes(stocks),
-        fetchSupplementaryQuotes(stocks),
+        fetchAllQuotes(current),
+        fetchSupplementaryQuotes(current),
       ]);
 
       setStocks((prev) => prev.map((stock) => ({
@@ -170,7 +190,7 @@ export default function StockScreener() {
         if (typeof quote.price === "number") nextPrices[ticker] = quote.price;
       });
 
-      Object.entries(priceAlerts).forEach(([ticker, thresholdInput]) => {
+      Object.entries(priceAlertsRef.current).forEach(([ticker, thresholdInput]) => {
         const threshold = Number(thresholdInput);
         const prev = previousPricesRef.current[ticker];
         const current = nextPrices[ticker];
@@ -193,9 +213,10 @@ export default function StockScreener() {
     } catch {
       setQuotesLive(false);
     } finally {
+      refreshInFlightRef.current = false;
       setQuotesLoading(false);
     }
-  }, [notifyThresholdCrossed, priceAlerts, setStocks, stocks]);
+  }, [notifyThresholdCrossed, setStocks]);
 
   const addStock = useCallback((result, options = {}) => {
     const incoming = createStockFromResult({
@@ -259,14 +280,13 @@ export default function StockScreener() {
     return () => { cancelled = true; };
   }, []);
 
+  // Refresh straight away when the watched tickers change, then every 45s.
   useEffect(() => {
-    const t = setTimeout(() => { refreshQuotes(); }, 0);
+    if (!tickerKey) return undefined;
+    refreshQuotes();
     const interval = setInterval(refreshQuotes, QUOTE_REFRESH_INTERVAL_MS);
-    return () => {
-      clearTimeout(t);
-      clearInterval(interval);
-    };
-  }, [refreshQuotes]);
+    return () => clearInterval(interval);
+  }, [tickerKey, refreshQuotes]);
 
   useEffect(() => {
     if (!selTicker) return;
