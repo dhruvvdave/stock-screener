@@ -75,7 +75,7 @@ async def get_stock(symbol: Symbol, http: HttpDep, cache: CacheDep, limiter: Lim
         return result
 
     # Nothing answered. Distinguish "we were not allowed to ask" from "we
-    # asked and this symbol has no quote" — the first is worth retrying.
+    # asked and this symbol has no quote": only the first is worth retrying.
     if exhausted:
         source = exhausted[0]
         raise rate_limited(source, await limiter.retry_after(source))

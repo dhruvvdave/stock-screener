@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         # The quote and chart endpoints work without Postgres; only the
         # /history reads and the background writes need it.
-        log.warning("Postgres unavailable — history will be empty", exc_info=True)
+        log.warning("Postgres unavailable; history will be empty", exc_info=True)
 
     yield
 

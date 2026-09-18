@@ -23,9 +23,9 @@ CandleRange = Annotated[
 def rate_limited(source: str, retry_after: float) -> HTTPException:
     """429 with a Retry-After the client can act on.
 
-    Every endpoint answers an exhausted budget the same way. Returning an
-    empty 200 instead — as several of these used to — is worse than useless:
-    the caller caches a blank as though it were data.
+    Every endpoint answers an exhausted budget the same way. Several of these
+    used to return an empty 200, which is worse than useless: the caller
+    stores a blank as though it were data.
     """
     seconds = max(1, round(retry_after)) if retry_after > 0 else 1
     return HTTPException(

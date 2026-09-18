@@ -35,7 +35,7 @@ async def get_enrich(symbol: Symbol, http: HttpDep, cache: CacheDep, limiter: Li
             "overview": overview if not isinstance(overview, BaseException) else None,
         }
         # Both sources are optional extras, so an all-empty result is a real
-        # answer — but not one worth holding for six hours.
+        # answer, just not one worth holding for six hours.
         return payload
 
     return await cache.get_or_set(

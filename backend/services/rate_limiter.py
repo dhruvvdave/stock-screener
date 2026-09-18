@@ -13,8 +13,8 @@ the tokens it had earned, so a client that retried while empty would reset
 its own progress on each attempt and never recover.
 
 A Lua script runs the whole read-refill-write sequence atomically, so
-concurrent callers — across async tasks or separate uvicorn workers — can
-never oversubscribe the bucket.
+concurrent callers never oversubscribe the bucket, whether they are async
+tasks in one process or separate uvicorn workers.
 """
 
 import time

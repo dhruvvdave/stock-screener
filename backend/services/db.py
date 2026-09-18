@@ -49,7 +49,7 @@ class PriceHistory(Base):
 # asyncpg sends statements through the extended query protocol, which takes
 # exactly one command per call, so these stay separate rather than living in
 # one semicolon-joined blob. Joined, the CREATE TABLE raised every time and
-# the startup handler logged it as "Postgres unavailable" — the table was
+# the startup handler logged it as "Postgres unavailable", so the table was
 # never created and every history write failed silently.
 PARTITION_DDL = (
     """
@@ -141,10 +141,10 @@ async def ensure_partitions_for(conn, timestamps: list[datetime]) -> None:
     """Make sure every month covered by *timestamps* has a partition.
 
     Inserting into a range-partitioned table with no matching partition raises
-    outright, so a backfill that reaches past the pre-created window — or an
-    instance left running longer than that window — would otherwise start
-    failing. Creating on demand keeps this self-contained: no cron, no
-    external scheduler.
+    outright. A backfill reaching past the pre-created window, or an instance
+    left running longer than that window, would otherwise start failing.
+    Creating them on demand keeps this self-contained, with no cron job to
+    forget about.
     """
     for moment in {datetime(ts.year, ts.month, 1) for ts in timestamps}:  # noqa: DTZ001
         await _create_partition(conn, moment)
