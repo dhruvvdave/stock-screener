@@ -1,4 +1,15 @@
 dist/
 node_modules/
-backend/__pycache__/
-backend/**/__pycache__/
+
+# Local secrets. .env.example is the template that is committed.
+.env
+.env.*
+!.env.example
+
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/

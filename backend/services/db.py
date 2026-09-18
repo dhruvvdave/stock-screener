@@ -5,9 +5,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import (
-    Column, DateTime, Float, Integer, PrimaryKeyConstraint, String, text,
-)
+from sqlalchemy import Column, DateTime, Float, PrimaryKeyConstraint, String, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -43,7 +41,6 @@ class PriceHistory(Base):
     low = Column(Float)
     close = Column(Float, nullable=False)
     volume = Column(Float)
-    id = Column(Integer)  # informational only; uniqueness comes from the PK
 
 
 # Re-fetching a chart re-sends bars we already hold, so the primary key is the

@@ -184,3 +184,36 @@ async def test_a_queued_write_failure_does_not_escape(db):
     db.queue_price_history_write("TSLA", "yahoo", [{"timestamp": "not-a-date", "close": 1.0}])
     await db.drain_background_writes()   # must not raise
     assert await count(db.get_engine(), "TSLA") == 0
+
+
+async def test_rows_can_be_read_back_through_the_orm(db):
+    """The /history endpoint selects the mapped model, so every mapped column
+    must exist in the table the DDL creates. A column on the model that the
+    DDL does not create only fails here, on read."""
+    from sqlalchemy import select
+
+    from backend.services.db import PriceHistory
+
+    async with db.get_session_factory()() as session:
+        await db.write_price_history(session, "AAPL", "yahoo", bars(["2026-09-01"]))
+
+    async with db.get_session_factory()() as session:
+        rows = (await session.execute(
+            select(PriceHistory).where(PriceHistory.ticker == "AAPL")
+        )).scalars().all()
+
+    assert len(rows) == 1
+    assert rows[0].close == 100.0
+    assert rows[0].source == "yahoo"
+
+
+async def test_an_empty_table_reads_back_as_an_empty_list(db):
+    from sqlalchemy import select
+
+    from backend.services.db import PriceHistory
+
+    async with db.get_session_factory()() as session:
+        rows = (await session.execute(
+            select(PriceHistory).where(PriceHistory.ticker == "NOTHING")
+        )).scalars().all()
+    assert rows == []

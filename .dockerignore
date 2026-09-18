@@ -1,0 +1,29 @@
+# Keep the build context small and make sure local secrets and host-built
+# artefacts never reach an image layer.
+.env
+.env.*
+!.env.example
+
+.git
+.github
+node_modules
+dist
+*.log
+
+__pycache__
+**/__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.venv
+venv
+
+src
+public
+api
+index.html
+package*.json
+vite.config.js
+eslint.config.js
+jest.config.cjs
+babel.config.cjs
