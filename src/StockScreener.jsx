@@ -315,13 +315,25 @@ export default function StockScreener() {
     if (!selTicker) return;
 
     let cancelled = false;
-    Promise.all([
+    // allSettled, not all: one section failing should not blank the other
+    // three, and each needs to report its own failure rather than vanish.
+    Promise.allSettled([
       fetchAnalystData(selTicker, selExchange),
       fetchFundamentals(selTicker, selExchange),
       fetchNews(selTicker, selExchange),
       fetchEnrich(selTicker, selExchange),
-    ]).then(([analyst, fundamentals, news, enrich]) => {
+    ]).then((settled) => {
       if (cancelled) return;
+      const [analystR, fundamentalsR, newsR, enrichR] = settled;
+      const valueOf = (r) => (r.status === "fulfilled" ? r.value : null);
+      const errorOf = (r) =>
+        r.status === "rejected" ? (r.reason?.message ?? "Failed to load") : null;
+
+      const analyst = valueOf(analystR);
+      const fundamentals = valueOf(fundamentalsR);
+      const news = valueOf(newsR);
+      const enrich = valueOf(enrichR);
+
       setSupplementary({
         ticker: selTicker,
         data: {
@@ -330,6 +342,12 @@ export default function StockScreener() {
           news,
           fmp:      enrich?.fmp      ?? null,
           overview: enrich?.overview ?? null,
+          errors: {
+            analyst:      errorOf(analystR),
+            fundamentals: errorOf(fundamentalsR),
+            news:         errorOf(newsR),
+            enrich:       errorOf(enrichR),
+          },
         },
       });
 

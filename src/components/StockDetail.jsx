@@ -19,7 +19,21 @@ function fmtEarnings(ts) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function AnalystSection({ analyst, loading }) {
+// A failed request used to render as nothing at all, which looks identical
+// to a ticker that simply has no analyst coverage or no news.
+function SectionError({ label, message }) {
+  return (
+    <>
+      <div className="sd-divider" />
+      <div className="sd-analyst">
+        <div className="sd-section-label">{label}</div>
+        <p className="sd-load-error" role="status">{message}</p>
+      </div>
+    </>
+  );
+}
+
+function AnalystSection({ analyst, loading, error }) {
   if (loading && !analyst) {
     return (
       <>
@@ -33,6 +47,7 @@ function AnalystSection({ analyst, loading }) {
       </>
     );
   }
+  if (error) return <SectionError label="Analyst consensus" message={error} />;
   if (!analyst?.total) return null;
   const { buy, hold, sell, total, meanTarget, highTarget, lowTarget } = analyst;
   const consensus = buy > hold && buy > sell ? "BUY"
@@ -78,7 +93,7 @@ function AnalystSection({ analyst, loading }) {
   );
 }
 
-function FinancialHealthSection({ fundamentals: f, loading }) {
+function FinancialHealthSection({ fundamentals: f, loading, error }) {
   if (loading && !f) {
     return (
       <>
@@ -97,6 +112,7 @@ function FinancialHealthSection({ fundamentals: f, loading }) {
       </>
     );
   }
+  if (error) return <SectionError label="Financial Health" message={error} />;
   if (!f) return null;
   const hasAny = [
     f.forwardPE, f.pegRatio, f.shortRatio, f.shortPctFloat,
@@ -131,7 +147,7 @@ function FinancialHealthSection({ fundamentals: f, loading }) {
   );
 }
 
-function IncomeStatementSection({ fmp, overview, loading }) {
+function IncomeStatementSection({ fmp, overview, loading, error }) {
   if (loading && !fmp && !overview) {
     return (
       <>
@@ -150,6 +166,7 @@ function IncomeStatementSection({ fmp, overview, loading }) {
       </>
     );
   }
+  if (error) return <SectionError label="Income & Valuation" message={error} />;
   if (!fmp && !overview) return null;
   const f = fmp      ?? {};
   const o = overview ?? {};
@@ -214,7 +231,7 @@ function IncomeStatementSection({ fmp, overview, loading }) {
   );
 }
 
-function NewsSection({ news, loading }) {
+function NewsSection({ news, loading, error }) {
   const [expanded, setExpanded] = useState(false);
   if (loading && !news) {
     return (
@@ -232,6 +249,7 @@ function NewsSection({ news, loading }) {
       </>
     );
   }
+  if (error) return <SectionError label="Recent News" message={error} />;
   if (!news?.length) return null;
   const visible = expanded ? news : news.slice(0, 3);
 
@@ -527,22 +545,26 @@ export default function StockDetail({
         <AnalystSection
           analyst={supplementary?.analyst ?? null}
           loading={supplementaryLoading}
+          error={supplementary?.errors?.analyst ?? null}
         />
 
         <FinancialHealthSection
           fundamentals={supplementary?.fundamentals ?? null}
           loading={supplementaryLoading}
+          error={supplementary?.errors?.fundamentals ?? null}
         />
 
         <IncomeStatementSection
           fmp={supplementary?.fmp ?? null}
           overview={supplementary?.overview ?? null}
           loading={supplementaryLoading}
+          error={supplementary?.errors?.enrich ?? null}
         />
 
         <NewsSection
           news={supplementary?.news ?? null}
           loading={supplementaryLoading}
+          error={supplementary?.errors?.news ?? null}
         />
 
         <div className="sd-divider" />

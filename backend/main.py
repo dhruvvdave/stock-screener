@@ -10,8 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
 from backend.routers import (
-    analyst, app_metrics, candle, enrich, fundamentals, health, history,
-    news, profile, quotes, search, stock, stock_metrics,
+    analyst, analyze, app_metrics, candle, enrich, fundamentals, health,
+    history, news, profile, quotes, search, stock, stock_metrics,
 )
 from backend.services.db import drain_background_writes, init_db
 
@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 ROUTERS = [
     stock, quotes, candle, search, profile, analyst, news,
     fundamentals, stock_metrics, enrich, app_metrics, history, health,
+    analyze,
 ]
 
 
@@ -59,7 +60,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins(),
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
 

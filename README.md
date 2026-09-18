@@ -96,6 +96,7 @@ Enrich:        FMP + Alpha Vantage (parallel)
 | GET | `/api/fundamentals?symbol=` | Key statistics and ratios |
 | GET | `/api/metrics?symbol=` | Per-ticker Finnhub metrics |
 | GET | `/api/enrich?symbol=` | FMP and Alpha Vantage enrichment |
+| POST | `/api/analyze` | AI analysis, proxied to OpenAI |
 | GET | `/metrics` | Cache hit rate and per-source counters |
 | GET | `/health` | Liveness, with Redis and Postgres checked separately |
 | GET | `/history/{ticker}?start=&end=&limit=&offset=` | Stored OHLCV from Postgres |
@@ -139,6 +140,9 @@ FINNHUB_KEY=your_key_here
 FMP_KEY=
 AV_KEY=
 TWELVE_DATA_KEY=
+
+# Optional, for the AI panel. Visitors can supply their own key instead.
+OPENAI_KEY=
 ```
 
 Then `docker compose up --build`.
@@ -185,6 +189,7 @@ RATE_ALPHAVANTAGE=5,0.083     # free tier: 5 req/min
 RATE_FMP=10,0.167             # free tier: 10 req/min
 RATE_STOOQ=30,1.0
 RATE_TWELVEDATA=8,0.133       # free tier: 8 req/min
+RATE_OPENAI=20,0.2            # guards the server-side OpenAI key
 
 # Result limits and partition window
 HISTORY_DEFAULT_LIMIT=1000
@@ -235,13 +240,20 @@ backend/
 └── tests/
 ```
 
+### AI analysis
+
+The panel sends its prompt to `/api/analyze`, which forwards it to OpenAI.
+The key comes from the request body, so a visitor can bring their own, or from
+`OPENAI_KEY` on the server. Either way it is used for that one call and never
+logged or stored server-side. A visitor-supplied key lives in their
+`localStorage` and travels to the backend with each request, so serve the app
+over HTTPS if you expose it beyond localhost.
+
 ## Known issues
 
-- The AI analysis panel calls `/api/analyze`, which exists only as a Vercel
-  serverless function in `api/`. The FastAPI backend does not implement it, so
-  the panel returns an error under Docker Compose.
 - `api/*.js` duplicates the FastAPI endpoints. It predates the Python backend
-  and the two have to be kept in sync by hand.
+  and exists so the app can deploy to Vercel as serverless functions; the two
+  implementations have to be kept in sync by hand.
 - The hardcoded `YAHOO_SYMBOLS` map in `src/data/api.js` needs dynamic
   exchange-aware resolution.
 - TSX-V coverage depends on which source picks the ticker up.

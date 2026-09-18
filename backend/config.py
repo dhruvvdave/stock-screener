@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     fmp_key: str = ""
     av_key: str = ""
     twelve_data_key: str = ""
+    # Server-side fallback for the AI panel; visitors may send their own.
+    openai_key: str = ""
 
     # Infrastructure
     redis_url: str = "redis://localhost:6379/0"
@@ -47,6 +49,7 @@ class Settings(BaseSettings):
     rate_fmp: str = "10,0.167"          # free tier: 10 req/min
     rate_stooq: str = "30,1.0"
     rate_twelvedata: str = "8,0.133"    # free tier: 8 req/min
+    rate_openai: str = "20,0.2"         # protects the server key from a hot loop
 
     def ttl_for(self, resource: str) -> int:
         """TTL for a cache resource. Ranged resources share their base TTL,
