@@ -1,52 +1,61 @@
-"""GET /api/fundamentals — key statistics and financial ratios from Yahoo Finance."""
+"""GET /api/fundamentals — key statistics and ratios from Yahoo Finance."""
 
-from fastapi import APIRouter, Query
+from typing import Any
+
+from fastapi import APIRouter
 
 from backend.deps import CacheDep, HttpDep, LimiterDep
 from backend.fetchers.yahoo import YahooFetcher
+from backend.services import cache as cache_res
+from backend.validation import Symbol, rate_limited
 
 router = APIRouter()
 
+# Yahoo wraps most numbers as {"raw": ..., "fmt": ...}; some come through bare.
+_FIELDS = [
+    ("forwardPE", "defaultKeyStatistics", "forwardPE"),
+    ("pegRatio", "defaultKeyStatistics", "pegRatio"),
+    ("shortRatio", "defaultKeyStatistics", "shortRatio"),
+    ("shortPctFloat", "defaultKeyStatistics", "shortPercentOfFloat"),
+    ("currentRatio", "financialData", "currentRatio"),
+    ("debtToEquity", "financialData", "debtToEquity"),
+    ("freeCashFlow", "financialData", "freeCashflow"),
+    ("operatingMargins", "financialData", "operatingMargins"),
+    ("profitMargins", "financialData", "profitMargins"),
+    ("returnOnEquity", "financialData", "returnOnEquity"),
+    ("returnOnAssets", "financialData", "returnOnAssets"),
+]
+
+
+def _raw(value: Any) -> Any:
+    return value.get("raw") if isinstance(value, dict) else value
+
 
 @router.get("/api/fundamentals")
-async def get_fundamentals(
-    symbol: str = Query(..., min_length=1),
-    http: HttpDep = None,
-    cache: CacheDep = None,
-    limiter: LimiterDep = None,
-):
+async def get_fundamentals(symbol: Symbol, http: HttpDep, cache: CacheDep, limiter: LimiterDep):
     symbol = symbol.strip()
-    cached = await cache.get(symbol, "yahoo", "fundamentals")
-    if cached is not None:
-        return cached
+    limited = False
 
-    if not await limiter.consume("yahoo"):
-        return {}
+    async def fetch():
+        nonlocal limited
+        if not await limiter.consume("yahoo"):
+            limited = True
+            return None
+        await cache.incr_source("yahoo")
+        data = await YahooFetcher(http).quote_summary(
+            symbol, "defaultKeyStatistics,financialData"
+        )
+        if not data:
+            return None
+        return {
+            out: _raw((data.get(module) or {}).get(key))
+            for out, module, key in _FIELDS
+        }
 
-    await cache._redis.incr("metrics:source:yahoo:requests")
-    data = await YahooFetcher(http).quote_summary(symbol, "defaultKeyStatistics,financialData")
-
-    ks = data.get("defaultKeyStatistics", {})
-    fd = data.get("financialData", {})
-
-    def raw(d, key):
-        v = d.get(key)
-        if isinstance(v, dict):
-            return v.get("raw")
-        return v
-
-    payload = {
-        "forwardPE": raw(ks, "forwardPE"),
-        "pegRatio": raw(ks, "pegRatio"),
-        "shortRatio": raw(ks, "shortRatio"),
-        "shortPctFloat": raw(ks, "shortPercentOfFloat"),
-        "currentRatio": raw(fd, "currentRatio"),
-        "debtToEquity": raw(fd, "debtToEquity"),
-        "freeCashFlow": raw(fd, "freeCashflow"),
-        "operatingMargins": raw(fd, "operatingMargins"),
-        "profitMargins": raw(fd, "profitMargins"),
-        "returnOnEquity": raw(fd, "returnOnEquity"),
-        "returnOnAssets": raw(fd, "returnOnAssets"),
-    }
-    await cache.set(symbol, "yahoo", "fundamentals", payload)
-    return payload
+    result = await cache.get_or_set(symbol, cache_res.FUNDAMENTALS, fetch)
+    if result is not None:
+        return result
+    if limited:
+        raise rate_limited("yahoo", await limiter.retry_after("yahoo"))
+    # Yahoo has no statistics for plenty of small listings; that is not an error.
+    return {out: None for out, _, _ in _FIELDS}

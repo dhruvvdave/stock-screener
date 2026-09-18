@@ -874,6 +874,14 @@ button { touch-action: manipulation; }
   letter-spacing: 0.02em;
 }
 
+.sd-load-error {
+  font-size: 11px;
+  color: var(--neg);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
 /* Earnings table (replacing inline styles) */
 .sd-earn-section { margin-top: 14px; }
 .sd-earn-title {

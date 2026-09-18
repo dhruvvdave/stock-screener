@@ -7,6 +7,11 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   postgres:
     image: postgres:16-alpine
@@ -19,6 +24,11 @@ services:
       - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U markr -d markr"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   api:
     build:
@@ -27,14 +37,22 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    # Optional: a fresh clone comes up without one. The app runs on the
+    # keyless sources (Yahoo, Stooq) until you add keys.
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       REDIS_URL: redis://redis:6379/0
       POSTGRES_DSN: postgresql+asyncpg://markr:markr@postgres:5432/markr
+    # Wait for both to report healthy: the API creates its partitioned table
+    # at startup, so starting before Postgres accepts connections means
+    # coming up with no schema.
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
 
 volumes:
   redis_data:

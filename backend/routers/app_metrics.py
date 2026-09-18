@@ -1,33 +1,26 @@
-"""GET /metrics — system-level cache and rate-limit counters from Redis."""
+"""GET /metrics — cache and rate-limit counters, and GET /health."""
 
 from fastapi import APIRouter
 
-from backend.deps import RedisDep
-from backend.services.cache import ResponseCache
+from backend.deps import CacheDep, RedisDep
 
 router = APIRouter()
 
-_SOURCES = ["finnhub", "yahoo", "alphavantage", "fmp", "stooq", "twelvedata"]
+SOURCES = ["finnhub", "yahoo", "alphavantage", "fmp", "stooq", "twelvedata"]
 
 
 @router.get("/metrics")
-async def get_metrics(redis: RedisDep):
-    cache = ResponseCache(redis)
-    cache_stats = await cache.get_metrics()
-
-    source_stats = {}
+async def get_metrics(redis: RedisDep, cache: CacheDep):
     keys = []
-    for src in _SOURCES:
-        keys.append(f"metrics:source:{src}:requests")
-        keys.append(f"metrics:source:{src}:rate_limit_hits")
+    for source in SOURCES:
+        keys += [f"metrics:source:{source}:requests", f"metrics:source:{source}:rate_limit_hits"]
 
     values = await redis.mget(*keys)
-    for i, src in enumerate(_SOURCES):
-        reqs = int(values[i * 2] or 0)
-        rl_hits = int(values[i * 2 + 1] or 0)
-        source_stats[src] = {"requests": reqs, "rate_limit_hits": rl_hits}
-
-    return {
-        "cache": cache_stats,
-        "sources": source_stats,
+    sources = {
+        source: {
+            "requests": int(values[i * 2] or 0),
+            "rate_limit_hits": int(values[i * 2 + 1] or 0),
+        }
+        for i, source in enumerate(SOURCES)
     }
+    return {"cache": await cache.get_metrics(), "sources": sources}

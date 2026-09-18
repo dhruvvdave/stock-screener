@@ -109,15 +109,16 @@ class YahooFetcher:
                     continue
                 timestamps = result.get("timestamp")
                 ohlcv = [
-                    {"o": o, "h": h, "l": l, "c": c, "v": v}
-                    for o, h, l, c, v in zip(
+                    {"o": open_, "h": high, "l": low, "c": close, "v": volume}
+                    for open_, high, low, close, volume in zip(
                         q.get("open") or [],
                         q.get("high") or [],
                         q.get("low") or [],
                         q.get("close") or [],
                         q.get("volume") or [],
+                        strict=False,
                     )
-                    if c is not None
+                    if close is not None
                 ]
                 return {
                     "prices": closes,

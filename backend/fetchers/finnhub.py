@@ -1,6 +1,6 @@
 """Finnhub fetcher — primary source for quotes, candles, search, analyst."""
 
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -39,7 +39,7 @@ class FinnhubFetcher:
             if not r.is_success:
                 return None
             d = r.json()
-            if not isinstance(d.get("c"), (int, float)) or d["c"] <= 0:
+            if not isinstance(d.get("c"), int | float) or d["c"] <= 0:
                 return None
             return {
                 "symbol": symbol,
@@ -74,10 +74,10 @@ class FinnhubFetcher:
             if d.get("s") != "ok" or not isinstance(d.get("c"), list) or len(d["c"]) < 3:
                 return None
             ohlcv = [
-                {"o": o, "h": h, "l": l, "c": c, "v": v}
-                for o, h, l, c, v in zip(
+                {"o": open_, "h": high, "l": low, "c": close, "v": volume}
+                for open_, high, low, close, volume in zip(
                     d.get("o", []), d.get("h", []), d.get("l", []),
-                    d["c"], d.get("v", [])
+                    d["c"], d.get("v", []), strict=False,
                 )
             ]
             return {
@@ -198,7 +198,7 @@ class FinnhubFetcher:
     async def news(self, symbol: str) -> list[dict] | None:
         if not self._key:
             return None
-        today = date.today()
+        today = datetime.now(UTC).date()
         from_ = (today - timedelta(days=7)).isoformat()
         try:
             r = await self._client.get(

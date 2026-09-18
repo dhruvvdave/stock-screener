@@ -1,6 +1,6 @@
 """Stooq fetcher — free chart fallback, no API key required."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -17,6 +17,10 @@ def _to_stooq_symbol(finnhub_symbol: str) -> str | None:
     return finnhub_symbol.lower() + ".us"
 
 
+def _day(moment: datetime) -> str:
+    return moment.strftime("%Y%m%d")
+
+
 class StooqFetcher:
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client
@@ -26,13 +30,12 @@ class StooqFetcher:
         if not stooq_sym:
             return None
         days = _RANGE_DAYS.get(range_, 30)
-        end = datetime.utcnow()
+        end = datetime.now(UTC)
         start = end - timedelta(days=days)
-        fmt = lambda d: d.strftime("%Y%m%d")
         try:
             r = await self._client.get(
                 "https://stooq.com/q/d/l/",
-                params={"s": stooq_sym, "d1": fmt(start), "d2": fmt(end), "i": "d"},
+                params={"s": stooq_sym, "d1": _day(start), "d2": _day(end), "i": "d"},
             )
             if not r.is_success:
                 return None
@@ -44,7 +47,9 @@ class StooqFetcher:
                 cols = line.split(",")
                 try:
                     rows.append({
-                        "timestamp": datetime.strptime(cols[0], "%Y-%m-%d"),
+                        # Stooq reports session dates, which carry no time zone;
+                        # price_history stores naive UTC timestamps to match.
+                        "timestamp": datetime.strptime(cols[0], "%Y-%m-%d"),  # noqa: DTZ007
                         "open": float(cols[1]),
                         "high": float(cols[2]),
                         "low": float(cols[3]),

@@ -39,6 +39,46 @@ function toFinnhubSymbol(ticker, exchange) {
   return ticker;  // US exchanges pass through unchanged (NYSE, NASDAQ, AMEX, OTC)
 }
 
+// ── Request helper ─────────────────────────────────────────────────────────
+// Most helpers below swallow errors and return null, which leaves callers
+// unable to tell a failed request from a ticker that genuinely has no data.
+// The detail-view helpers use this instead and throw, so the UI can say which
+// happened.
+
+export class RequestFailed extends Error {
+  constructor(message, status = 0) {
+    super(message);
+    this.name = "RequestFailed";
+    this.status = status;
+  }
+}
+
+async function requestJSON(url) {
+  let response;
+  try {
+    response = await fetch(url);
+  } catch {
+    throw new RequestFailed("Couldn't reach the server");
+  }
+
+  if (response.status === 429) {
+    const retryAfter = Number(response.headers.get("Retry-After"));
+    throw new RequestFailed(
+      retryAfter ? `Rate limited, retry in ${retryAfter}s` : "Rate limited",
+      429
+    );
+  }
+  if (!response.ok) {
+    throw new RequestFailed(`Request failed (${response.status})`, response.status);
+  }
+
+  try {
+    return await response.json();
+  } catch {
+    throw new RequestFailed("Malformed response", response.status);
+  }
+}
+
 // ── Exchange rate (no API key needed) ──────────────────────────────────────
 
 export async function fetchExchangeRate() {
@@ -237,13 +277,7 @@ export function calculateTechnicals(prices) {
 
 export async function fetchAnalystData(ticker, exchange = "") {
   const symbol = toFinnhubSymbol(ticker, exchange);
-  try {
-    const r = await fetch(`/api/analyst?symbol=${encodeURIComponent(symbol)}`);
-    if (!r.ok) return null;
-    return await r.json();
-  } catch {
-    return null;
-  }
+  return requestJSON(`/api/analyst?symbol=${encodeURIComponent(symbol)}`);
 }
 
 
@@ -264,13 +298,7 @@ export async function fetchMetrics(ticker, exchange = "") {
 
 export async function fetchFundamentals(ticker, exchange = "") {
   const symbol = toYahooSymbol(ticker, exchange);
-  try {
-    const r = await fetch(`/api/fundamentals?symbol=${encodeURIComponent(symbol)}`);
-    if (!r.ok) return null;
-    return await r.json();
-  } catch {
-    return null;
-  }
+  return requestJSON(`/api/fundamentals?symbol=${encodeURIComponent(symbol)}`);
 }
 
 // ── Recent news via /api/news proxy (Yahoo, no key) ─────────────────────────
@@ -278,29 +306,17 @@ export async function fetchFundamentals(ticker, exchange = "") {
 export async function fetchNews(ticker, exchange = "") {
   const yahooSymbol   = toYahooSymbol(ticker, exchange);
   const finnhubSymbol = toFinnhubSymbol(ticker, exchange);
-  try {
-    const r = await fetch(
-      `/api/news?symbol=${encodeURIComponent(yahooSymbol)}&finnhubSymbol=${encodeURIComponent(finnhubSymbol)}`
-    );
-    if (!r.ok) return null;
-    const d = await r.json();
-    return d.news ?? null;
-  } catch {
-    return null;
-  }
+  const d = await requestJSON(
+    `/api/news?symbol=${encodeURIComponent(yahooSymbol)}&finnhubSymbol=${encodeURIComponent(finnhubSymbol)}`
+  );
+  return d.news ?? null;
 }
 
 // ── FMP + Alpha Vantage via /api/enrich proxy (both optional) ────────────
 
 export async function fetchEnrich(ticker, exchange = "") {
   const symbol = toYahooSymbol(ticker, exchange);
-  try {
-    const r = await fetch(`/api/enrich?symbol=${encodeURIComponent(symbol)}`);
-    if (!r.ok) return null;
-    return await r.json();
-  } catch {
-    return null;
-  }
+  return requestJSON(`/api/enrich?symbol=${encodeURIComponent(symbol)}`);
 }
 
 // ── TradingView symbol mapping ─────────────────────────────────────────────
