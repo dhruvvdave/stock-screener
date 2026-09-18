@@ -94,7 +94,8 @@ class AlphaVantageFetcher:
             rows = []
             for date_str, vals in sorted(series.items(), reverse=True):
                 rows.append({
-                    "timestamp": datetime.strptime(date_str, "%Y-%m-%d"),
+                    # Daily bars carry a session date and no zone.
+                    "timestamp": datetime.strptime(date_str, "%Y-%m-%d"),  # noqa: DTZ007
                     "open": float(vals.get("1. open", 0)),
                     "high": float(vals.get("2. high", 0)),
                     "low": float(vals.get("3. low", 0)),

@@ -1,40 +1,48 @@
-"""GET /api/enrich — optional enrichment from FMP + Alpha Vantage."""
+"""GET /api/enrich — optional enrichment from FMP and Alpha Vantage."""
 
 import asyncio
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 
 from backend.deps import CacheDep, HttpDep, LimiterDep
-from backend.fetchers.fmp import FMPFetcher
 from backend.fetchers.alphavantage import AlphaVantageFetcher
+from backend.fetchers.fmp import FMPFetcher
+from backend.services import cache as cache_res
+from backend.validation import Symbol
 
 router = APIRouter()
 
 
 @router.get("/api/enrich")
-async def get_enrich(
-    symbol: str = Query(..., min_length=1),
-    http: HttpDep = None,
-    cache: CacheDep = None,
-    limiter: LimiterDep = None,
-):
+async def get_enrich(symbol: Symbol, http: HttpDep, cache: CacheDep, limiter: LimiterDep):
     symbol = symbol.strip().upper()
-    cached = await cache.get(symbol, "any", "enrich")
-    if cached is not None:
-        return cached
 
-    fmp_ok = await limiter.consume("fmp")
-    av_ok = await limiter.consume("alphavantage")
+    async def fetch():
+        fmp_ok = await limiter.consume("fmp")
+        av_ok = await limiter.consume("alphavantage")
+        if fmp_ok:
+            await cache.incr_source("fmp")
+        if av_ok:
+            await cache.incr_source("alphavantage")
 
-    fmp_task = FMPFetcher(http).enrich(symbol) if fmp_ok else asyncio.sleep(0, result=None)
-    av_task = AlphaVantageFetcher(http).overview(symbol) if av_ok else asyncio.sleep(0, result=None)
+        fmp_data, overview = await asyncio.gather(
+            FMPFetcher(http).enrich(symbol) if fmp_ok else _none(),
+            AlphaVantageFetcher(http).overview(symbol) if av_ok else _none(),
+            return_exceptions=True,
+        )
+        payload = {
+            "fmp": fmp_data if not isinstance(fmp_data, BaseException) else None,
+            "overview": overview if not isinstance(overview, BaseException) else None,
+        }
+        # Both sources are optional extras, so an all-empty result is a real
+        # answer — but not one worth holding for six hours.
+        return payload
 
-    if fmp_ok:
-        await cache._redis.incr("metrics:source:fmp:requests")
-    if av_ok:
-        await cache._redis.incr("metrics:source:alphavantage:requests")
+    return await cache.get_or_set(
+        symbol, cache_res.ENRICH, fetch,
+        should_cache=lambda v: bool(v and (v.get("fmp") or v.get("overview"))),
+    )
 
-    fmp_data, overview = await asyncio.gather(fmp_task, av_task)
-    payload = {"fmp": fmp_data, "overview": overview}
-    await cache.set(symbol, "any", "enrich", payload)
-    return payload
+
+async def _none():
+    return None

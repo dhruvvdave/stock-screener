@@ -2,95 +2,99 @@
 
 import logging
 
-import redis.asyncio as aioredis
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter
 
+from backend.config import get_settings
 from backend.deps import CacheDep, HttpDep, LimiterDep
 from backend.fetchers.finnhub import FinnhubFetcher
 from backend.fetchers.yahoo import YahooFetcher
-from backend.config import get_settings
+from backend.services import cache as cache_res
+from backend.validation import Symbol, not_found, rate_limited
 
 log = logging.getLogger(__name__)
 router = APIRouter()
 
-_RESOLUTION = "quote"
+_SUFFIXES = [("TSXV:", ".V"), ("TSX:", ".TO"), ("LSE:", ".L"),
+             ("ASX:", ".AX"), ("NSE:", ".NS")]
 
 
 def _finnhub_to_yahoo(symbol: str) -> str:
-    for prefix, suffix in [("TSXV:", ".V"), ("TSX:", ".TO"), ("LSE:", ".L"),
-                            ("ASX:", ".AX"), ("NSE:", ".NS")]:
+    for prefix, suffix in _SUFFIXES:
         if symbol.startswith(prefix):
             return symbol[len(prefix):] + suffix
     return symbol
 
 
 @router.get("/api/stock")
-async def get_stock(
-    symbol: str = Query(..., min_length=1),
-    http: HttpDep = None,
-    cache: CacheDep = None,
-    limiter: LimiterDep = None,
-):
+async def get_stock(symbol: Symbol, http: HttpDep, cache: CacheDep, limiter: LimiterDep):
     symbol = symbol.strip().upper()
-    cached = await cache.get(symbol, "any", _RESOLUTION)
-    if cached is not None:
-        return cached
+    exhausted: list[str] = []
 
-    finnhub = FinnhubFetcher(http)
-    yahoo = YahooFetcher(http)
+    async def fetch():
+        settings = get_settings()
 
-    # 1. Finnhub
-    if await limiter.consume("finnhub"):
-        await _incr_source(cache._redis, "finnhub")
-        result = await finnhub.quote(symbol)
-        if result:
-            await cache.set(symbol, "finnhub", _RESOLUTION, result)
-            return result
-    else:
-        log.warning("finnhub rate-limited for %s", symbol)
+        if await limiter.consume("finnhub"):
+            await cache.incr_source("finnhub")
+            result = await FinnhubFetcher(http).quote(symbol)
+            if result:
+                return result
+        else:
+            exhausted.append("finnhub")
+            log.warning("finnhub rate-limited for %s", symbol)
 
-    # 2. Yahoo Finance
-    if await limiter.consume("yahoo"):
-        await _incr_source(cache._redis, "yahoo")
-        yahoo_sym = _finnhub_to_yahoo(symbol)
-        q = await yahoo.quote(yahoo_sym)
-        if q:
-            result = {
-                "symbol": symbol,
-                "price": q["regularMarketPrice"],
-                "changePercent": q.get("regularMarketChangePercent"),
-                "change": q.get("regularMarketChange"),
-                "volume": q.get("regularMarketVolume"),
-            }
-            await cache.set(symbol, "yahoo", _RESOLUTION, result)
-            return result
-    else:
-        log.warning("yahoo rate-limited for %s", symbol)
+        if await limiter.consume("yahoo"):
+            await cache.incr_source("yahoo")
+            quote = await YahooFetcher(http).quote(_finnhub_to_yahoo(symbol))
+            if quote:
+                return {
+                    "symbol": symbol,
+                    "price": quote["regularMarketPrice"],
+                    "changePercent": quote.get("regularMarketChangePercent"),
+                    "change": quote.get("regularMarketChange"),
+                    "volume": quote.get("regularMarketVolume"),
+                    "source": "yahoo",
+                }
+        else:
+            exhausted.append("yahoo")
+            log.warning("yahoo rate-limited for %s", symbol)
 
-    # 3. Twelve Data
-    settings = get_settings()
-    if settings.twelve_data_key and await limiter.consume("twelvedata"):
-        await _incr_source(cache._redis, "twelvedata")
-        td_sym = ":".join(reversed(symbol.split(":"))) if ":" in symbol else symbol
-        try:
-            r = await http.get(
-                "https://api.twelvedata.com/price",
-                params={"symbol": td_sym, "apikey": settings.twelve_data_key},
-            )
-            if r.is_success:
-                price = float(r.json().get("price", "nan"))
-                if price > 0:
-                    result = {"symbol": symbol, "price": price,
-                              "changePercent": None, "change": None, "volume": None}
-                    await cache.set(symbol, "twelvedata", _RESOLUTION, result)
-                    return result
-        except Exception:
-            pass
-    else:
-        log.warning("twelvedata rate-limited or unconfigured for %s", symbol)
+        if settings.twelve_data_key:
+            if await limiter.consume("twelvedata"):
+                await cache.incr_source("twelvedata")
+                price = await _twelve_data_price(http, symbol, settings.twelve_data_key)
+                if price is not None:
+                    return {"symbol": symbol, "price": price, "changePercent": None,
+                            "change": None, "volume": None, "source": "twelvedata"}
+            else:
+                exhausted.append("twelvedata")
 
-    raise HTTPException(status_code=404, detail=f"No quote found for symbol {symbol}")
+        return None
+
+    result = await cache.get_or_set(symbol, cache_res.QUOTE, fetch)
+    if result is not None:
+        return result
+
+    # Nothing answered. Distinguish "we were not allowed to ask" from "we
+    # asked and this symbol has no quote" — the first is worth retrying.
+    if exhausted:
+        source = exhausted[0]
+        raise rate_limited(source, await limiter.retry_after(source))
+    raise not_found(f"No quote found for symbol {symbol}")
 
 
-async def _incr_source(redis: aioredis.Redis, source: str) -> None:
-    await redis.incr(f"metrics:source:{source}:requests")
+async def _twelve_data_price(http, symbol: str, api_key: str) -> float | None:
+    td_symbol = ":".join(reversed(symbol.split(":"))) if ":" in symbol else symbol
+    try:
+        r = await http.get(
+            "https://api.twelvedata.com/price",
+            params={"symbol": td_symbol, "apikey": api_key},
+        )
+        if not r.is_success:
+            return None
+        price = float(r.json().get("price", "nan"))
+        return price if price > 0 else None
+    except (ValueError, TypeError, KeyError):
+        return None
+    except Exception:
+        log.exception("twelvedata price lookup failed for %s", symbol)
+        return None

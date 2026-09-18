@@ -1,5 +1,10 @@
 from .cache import ResponseCache
+from .db import init_db, queue_price_history_write
 from .rate_limiter import TokenBucketLimiter
-from .db import init_db, fire_and_forget_write
 
-__all__ = ["ResponseCache", "TokenBucketLimiter", "init_db", "fire_and_forget_write"]
+__all__ = [
+    "ResponseCache",
+    "TokenBucketLimiter",
+    "init_db",
+    "queue_price_history_write",
+]

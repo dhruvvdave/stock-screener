@@ -1,72 +1,72 @@
-"""GET /api/profile — company profile from Yahoo + Finnhub."""
+"""GET /api/profile — company profile merged from Yahoo and Finnhub."""
 
 import asyncio
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 
 from backend.deps import CacheDep, HttpDep, LimiterDep
 from backend.fetchers.finnhub import FinnhubFetcher
 from backend.fetchers.yahoo import YahooFetcher
+from backend.services import cache as cache_res
+from backend.validation import OptionalSymbol, not_found
 
 router = APIRouter()
 
 
+def _ok(value):
+    """Treat a failed leg as absent so one bad source cannot fail the merge."""
+    return value if isinstance(value, dict) else {}
+
+
 @router.get("/api/profile")
 async def get_profile(
-    symbol: str = Query(""),
-    finnhubSymbol: str = Query(""),
-    http: HttpDep = None,
-    cache: CacheDep = None,
-    limiter: LimiterDep = None,
+    http: HttpDep,
+    cache: CacheDep,
+    limiter: LimiterDep,
+    symbol: OptionalSymbol = "",
+    finnhubSymbol: OptionalSymbol = "",  # noqa: N803 — query name the frontend sends
 ):
     ticker = (finnhubSymbol or symbol).upper()
-    cached = await cache.get(ticker, "any", "profile")
-    if cached is not None:
-        return cached
+    if not ticker:
+        raise not_found("Provide symbol or finnhubSymbol")
 
-    yahoo = YahooFetcher(http)
-    finnhub = FinnhubFetcher(http)
+    async def fetch():
+        yahoo = YahooFetcher(http)
+        yahoo_ok = bool(symbol) and await limiter.consume("yahoo")
+        finnhub_ok = bool(finnhubSymbol) and await limiter.consume("finnhub")
 
-    yahoo_ok = await limiter.consume("yahoo")
-    finnhub_ok = bool(finnhubSymbol) and await limiter.consume("finnhub")
+        if yahoo_ok:
+            await cache.incr_source("yahoo")
+        if finnhub_ok:
+            await cache.incr_source("finnhub")
 
-    tasks = []
-    if yahoo_ok and symbol:
-        await cache._redis.incr("metrics:source:yahoo:requests")
-        tasks.append(yahoo.quote_summary(symbol, "assetProfile"))
-        tasks.append(yahoo.quote(symbol))
-    else:
-        tasks.extend([None, None])
+        summary, quote, finnhub_profile = await asyncio.gather(
+            yahoo.quote_summary(symbol, "assetProfile") if yahoo_ok else _empty(),
+            yahoo.quote(symbol) if yahoo_ok else _empty(),
+            FinnhubFetcher(http).profile(finnhubSymbol.upper()) if finnhub_ok else _empty(),
+            return_exceptions=True,
+        )
 
-    if finnhub_ok:
-        await cache._redis.incr("metrics:source:finnhub:requests")
-        tasks.append(finnhub.profile(finnhubSymbol.upper()))
-    else:
-        tasks.append(None)
+        asset_profile = _ok(_ok(summary).get("assetProfile"))
+        quote = _ok(quote)
+        finnhub_profile = _ok(finnhub_profile)
 
-    results = await asyncio.gather(*[t for t in tasks if t is not None],
-                                   return_exceptions=True)
-    idx = 0
-    asset_profile, yahoo_quote, finnhub_data = {}, {}, {}
-    for i, task in enumerate(tasks):
-        if task is not None:
-            val = results[idx]
-            idx += 1
-            if isinstance(val, Exception):
-                val = {}
-            if i == 0:
-                asset_profile = (val or {}).get("assetProfile", {})
-            elif i == 1:
-                yahoo_quote = val or {}
-            elif i == 2:
-                finnhub_data = val or {}
+        return {
+            "companyName": (finnhub_profile.get("name") or quote.get("longName")
+                            or quote.get("shortName") or symbol or ticker),
+            "sector": asset_profile.get("sector") or finnhub_profile.get("finnhubIndustry"),
+            "description": asset_profile.get("longBusinessSummary"),
+            "logo": finnhub_profile.get("logo"),
+            "website": finnhub_profile.get("weburl") or asset_profile.get("website"),
+        }
 
-    payload = {
-        "companyName": finnhub_data.get("name") or yahoo_quote.get("longName") or yahoo_quote.get("shortName") or symbol,
-        "sector": asset_profile.get("sector") or finnhub_data.get("finnhubIndustry"),
-        "description": asset_profile.get("longBusinessSummary"),
-        "logo": finnhub_data.get("logo"),
-        "website": finnhub_data.get("weburl") or asset_profile.get("website"),
-    }
-    await cache.set(ticker, "any", "profile", payload)
-    return payload
+    return await cache.get_or_set(
+        ticker, cache_res.PROFILE, fetch,
+        # A profile with nothing but the ticker echoed back is not worth
+        # holding for a day.
+        should_cache=lambda v: bool(v and (v.get("sector") or v.get("description"))),
+    )
+
+
+async def _empty():
+    return {}
